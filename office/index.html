@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Self-hosted copy: the browser may only talk to this site and ntfy.sh -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ntfy.sh data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Grok Bot Dashboard</title>
+  <meta name="description" content="A live 3D office of your Grok Bot bots: who is working, who waits for you, what got done.">
+  <link rel="icon" type="image/png" href="../assets/brand/logo-mark.png">
+  <link rel="apple-touch-icon" href="../assets/brand/logo-mark.png">
+  <meta name="theme-color" content="#F3F4F6">
+  <link rel="stylesheet" href="./vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./scene/scene.css">
+  <link rel="stylesheet" href="./ui/ui.css">
+  <link rel="stylesheet" href="./share/share.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+  <!-- the two big downloads start with the page, not after the scripts that ask for them (after the import map) -->
+  <link rel="modulepreload" href="./vendor/three/build/three.module.js">
+  <link rel="preload" href="../assets/office/office.glb" as="fetch" crossorigin>
+</head>
+<body>
+  <main id="scene" aria-label="Office"><div class="hq-loading" role="status"><span class="hq-loading-label">Building the office</span><span class="hq-loading-track"><i></i></span></div></main>
+  <header id="topbar"></header>
+  <nav id="floors" aria-label="Floors"></nav>
+  <aside id="panel" aria-label="Bot card and floor team"></aside>
+  <section id="feed" aria-label="Event feed"></section>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
