@@ -17,7 +17,7 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 export const STUDIO = {
   centre: [0.5, 0.45],                                    // where the light pools (fraction of the frame, y down)
   radii: [0.82, 0.78],                                    // ellipse the fall-off reaches its edge colour at
-  stops: [[0, '#C9CACE'], [0.5, '#BCBDC2'], [1, '#A9AAB0']],
+  stops: [[0, '#ABACB1'], [0.5, '#9D9EA4'], [1, '#8A8B92']],
   shadow: '#0B0C11',                                      // cool near-black, never pure black
   layers: [                                               // sigma (px), push down (px), strength at the silhouette edge
     { sigma: 4, down: 2, w: 0.40 },                       // contact: a thin dark seam that grounds the edge
