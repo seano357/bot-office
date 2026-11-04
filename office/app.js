@@ -162,9 +162,24 @@ async function startLocalDemo() {
     }
   }
   if (params.get('routines') === 'pending') { state.routinesPending = true; state.routines = []; }
+  await applyUsageSample(state);
   render();
-  if (params.get('fixture')) return;
+  if (params.get('fixture') || state.usageReadings) return;
   demoTimer = setInterval(simulate, 1600);
+}
+
+// ?usage=sample or ?usage=jump: local fixture for the burn-rate card. Never touches a live topic.
+async function applyUsageSample(state) {
+  const mode = params.get('usage');
+  if (mode !== 'sample' && mode !== 'jump') return;
+  try {
+    const fix = await (await fetch('./data/usage-' + mode + '.json', { cache: 'no-store' })).json();
+    if (Array.isArray(fix.readings)) state.usageReadings = fix.readings;
+    if (fix.usage && typeof fix.usage === 'object') state.usage = { ...state.usage, ...fix.usage };
+    if (typeof fix.now === 'string') state.now = fix.now;
+  } catch (err) {
+    console.warn('[app] usage sample did not load:', err.message);
+  }
 }
 
 const STEPS = {

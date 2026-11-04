@@ -2,8 +2,9 @@
 // The link is …/#<topic>. Self-hosted copy: the topic is read from https://ntfy.sh only (no relay, no other host). The
 // topic lives in the hash, so it never reaches the site's host. The
 // same reducer the local server uses (lib/state.js) turns the lines into the office's state. ntfy keeps 12 hours,
-// so the newest lines are cached per topic in localStorage and replayed first. A `working` bot that stays silent for
-// 20 minutes counts as idle.
+// so the newest lines are cached per topic in localStorage and replayed first. Usage readings are copied into a
+// second, longer history (lib/usage.js, `bothq.usage.<topic>`): the 600-line cache and ntfy's 12 hours are too short
+// for a week. A `working` bot that stays silent for 20 minutes counts as idle.
 //
 // Lines on the channel (one JSON object per message, at most 4 KB, anything else is dropped):
 //   {"bot":"…","status":"working|idle|waiting_user|error|done","step":"…"}     a status change
@@ -15,10 +16,11 @@
 //   {"routines":{"bot":"Bot A","items":[{"name":"…","schedule":"…","next_run":"ISO"}]}}   a bot's routines
 //   {"check":{"bots":["Bot A","Bot B"]}}                                     the setup bot starts a status check
 // On top of the server's state the office gets state.finished (done lines of the last 24 h, newest first),
-// state.routines (every bot's routines, soonest first) and state.check (the latest status check: who has answered), for
-// the «Finished», «Routines» and «Status check» panels.
+// state.routines (every bot's routines, soonest first), state.usageReadings (the burn-rate history) and state.check
+// (the latest status check: who has answered), for the «Finished», «Routines», «Usage» and «Status check» panels.
 import { StateStore, botIdFor } from './lib/state.js';
 import { FEED_BASE, feedFromLink } from './lib/feedbase.js';
+import { mergeReadings, normalizeReading, readingFrom } from './lib/usage.js';
 
 // Self-hosted copy: ntfy.sh is the only mailbox. The original's second mailbox (relay.0xcodila.com) and its visit
 // counter (POST relay.0xcodila.com/_beacon) are removed.
@@ -50,6 +52,8 @@ export async function connectFeed({ topic, servers }, onState) {
   let check = null;                                      // the latest status check: { ms, names }
   let lines = [], saveTimer = 0;
   const seen = new Set();
+  const usageKey = `bothq.usage.${topic}`;              // outlives the 12 h line cache; one week plus the previous one
+  let usageHist = loadUsage(usageKey);
 
   lines = cached(cacheKey).map((l) => ({ ...l, src: l.src || sources[0].tag }));
   if (usual) lines.push(...cached(oldKey).map((l) => ({ ...l, src: l.src || 'ntfy' })));
@@ -162,6 +166,13 @@ export async function connectFeed({ topic, servers }, onState) {
       if (!check || ms >= check.ms) check = { ms, names };
       return true;
     }
+    if (String(rec.type || '').toLowerCase() === 'usage') {
+      const reading = readingFrom({ ...rec, t }, time);
+      if (reading) {
+        const next = mergeReadings(usageHist, reading);
+        if (next !== usageHist) usageHist = next;
+      }
+    }
     store.apply({ ...rec, t }, { replay });
     return true;
   }
@@ -180,6 +191,7 @@ export async function connectFeed({ topic, servers }, onState) {
     s.routines = [...routines].flatMap(([bot, { name, items }]) => items.map((r) => ({ bot, name, ...r })))
       .sort((a, b) => (a.next_run ? Date.parse(a.next_run) : Infinity) - (b.next_run ? Date.parse(b.next_run) : Infinity));
     s.routinesPending = !historyDone;
+    s.usageReadings = usageHist;
     s.check = check && Date.now() - check.ms < CHECK_MS ? {
       t: new Date(check.ms).toISOString(),
       bots: check.names.map((name) => {                  // answered = a status line of its own at or after the check
@@ -190,7 +202,18 @@ export async function connectFeed({ topic, servers }, onState) {
     return s;
   }
   function publish() { store.commit(); onState(extras(store.snapshot())); }
-  function save() { try { localStorage.setItem(cacheKey, JSON.stringify(lines.slice(-KEEP))); } catch { /* private mode: not cached */ } }
+  function save() {
+    try { localStorage.setItem(cacheKey, JSON.stringify(lines.slice(-KEEP))); } catch { /* private mode: not cached */ }
+    try { localStorage.setItem(usageKey, JSON.stringify({ v: 1, readings: usageHist })); } catch { /* private mode */ }
+  }
+}
+
+function loadUsage(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) || 'null');
+    const arr = raw && Array.isArray(raw.readings) ? raw.readings : [];
+    return arr.reduce((h, r) => mergeReadings(h, normalizeReading(r)), []);
+  } catch { return []; }
 }
 
 function isMap(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }

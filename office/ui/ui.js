@@ -1,12 +1,12 @@
 /*
  * Bot HQ UI: live cards on top of the full-bleed 3D scene (CONTRACT v2.3; look = the wallpaper's cards, web/face/face.css).
  *   top-left   brand + live clock         top-center  status counters + needs-you banner
- *   left       floors "elevator"          right       floor team / bot card, usage slot, routines
+ *   left       floors "elevator"          right       floor team, usage burn-rate card, routines
  *   left, under the floors   dock: Status check (while one runs) / Waiting on me / Finished
  *   bottom     activity feed (wider, last 6)    zoom - / + sits at the right of the feed
  *
- *   #bhq-usage-slot (in the right rail, above Routines) is empty on purpose: a separate change
- *   mounts the usage burn-rate card there. The node moves into the phone sheet with the rail.
+ *   The usage card mounts into #bhq-usage-slot (right rail, under the floor team, above Routines).
+ *   On a phone the rail, banner and team move into the half-height sheet together.
  *
  *   initUI({ onSelectBot, onSelectFloor, onZoom, onOpenChat })
  *   renderUI(state, { currentFloor, selectedBot })   // idempotent, cheap, safe to call every second
@@ -14,6 +14,7 @@
  * State fields read: bots, floors, feed, usage, demo, now, summary, plus (bots-only mode, may be missing):
  *   bots[id].chat_url, state.finished [{ t, bot, name, step }], state.routines [{ bot, name, routine, schedule, next_run }],
  *   bots[id].last_seen (its own last status line), bots[id].unreported { from, to } (usage rose, no status line),
+ *   state.usageReadings [{ t, total, resets, bots }] (every usage line the page has kept, this week and the last),
  *   state.check { t, bots: [{ id, name, at }] } (a status check: who has answered).
  *
  * Every DOM node is created once and then patched in place (text / attributes / classes only when the
@@ -22,11 +23,13 @@
  * The UI text is English. The cards are graphite at every hour; no day/night switch here (see ui.css).
  *
  * Phones (<= 600 px wide, and landscape phones): <html> gets .bhq-phone (+ .bhq-land). The floors become a chip row,
- * and the floor team, "Waiting on me", Finished, Routines and the activity feed move into one bottom sheet (a grabber, a
- * peek with the floor name and counts, a spring snap between peek and ~60% of the height); the bot card becomes a sheet
+ * and the Needs you banner, floor team, usage card, Routines, Finished and the activity feed move into one bottom sheet (a grabber, a
+ * peek with the floor name and counts, a spring snap between peek and half the height); the bot card becomes a sheet
  * of its own (swipe down or x to close). Landscape: the sheet is a side column. Desktop is untouched: the same nodes move
  * back when the window grows. ?sheet=open starts with the sheet expanded (for screenshots).
  */
+
+import { analyzeUsage } from '../lib/usage.js';
 
 // Resolved against this file, so it works from /web/index.html, from a server rooted at web/, and from the harness.
 const THUMB_BASE = new URL('../../assets/blobs/thumbs/', import.meta.url).href;
@@ -611,8 +614,8 @@ function buildPanel(root) {
   const teamEmpty = h('p', { class: 'bhq-note', text: 'Nobody here yet. A bot shows up when it logs its first step.', hidden: true });
   const tcard = h('div', { class: 'bhq-tcard bhq-surface bhq-glow' }, list, teamEmpty);
   const team = h('section', { class: 'bhq-team', 'aria-label': 'Floor team' }, head, tcard);
-  // Empty on purpose. The usage burn-rate card (a separate change) mounts into this node;
-  // it sits under the floor team and above Routines, and the phone sheet carries it along.
+  // The usage burn-rate card mounts here: under the floor team, above Routines.
+  // The phone sheet carries the whole rail, so the card stays with it.
   const usageSlot = h('div', { id: 'bhq-usage-slot', class: 'bhq-usage-slot', 'data-slot': 'usage-burn' });
   const rail = h('div', { class: 'bhq-rail' }, usageSlot);
 
@@ -754,7 +757,7 @@ function setDockOpen(card, on, save = true) {
   }
   if (save) {
     const o = {};
-    for (const k of ['waiting', 'finished', 'routines']) o[k] = !!d[k].open;
+    for (const k of ['waiting', 'finished', 'routines', 'usage']) o[k] = !!d[k].open;
     lsSet(LS_DOCK, JSON.stringify(o));
   }
   fitDock(d.avail == null ? Infinity : d.avail);
@@ -764,7 +767,7 @@ function setDockOpen(card, on, save = true) {
 function fitDock(avail) {
   const d = U.dock;
   d.avail = avail;
-  // Routines live in the right rail, so they don't compete for the left column's height.
+  // Usage and Routines live in the right rail, so they don't compete for the left column's height.
   const cards = [d.check, d.waiting, d.finished];
   const live = cards.filter((c) => c && !c.root.hidden && !c.root.classList.contains('is-clear'));
   const on = new Set(live.filter((c) => c.open));
@@ -774,6 +777,7 @@ function fitDock(avail) {
     on.delete(victim);
   }
   for (const c of cards) if (c && !c.root.classList.contains('is-clear')) paintDockCard(c, on.has(c));
+  if (d.usage) paintDockCard(d.usage, !!d.usage.open && !d.usage.root.hidden);
   if (d.routines) paintDockCard(d.routines, !!d.routines.open && !d.routines.root.hidden);
 }
 
@@ -791,9 +795,11 @@ function setWaitBlur(on, save = true) {
 function buildDock(floors, feed) {
   const root = own(h('aside', { class: 'bhq-dock', 'aria-label': 'Waiting on me and finished work' }));
   const check = dockCard('check', 'Status check');
+  const usage = dockCard('usage', 'Usage');
   const waiting = dockCard('waiting', 'Waiting on me', { eye: true });
   const finished = dockCard('finished', 'Finished');
   const routines = dockCard('routines', 'Routines');
+  usage.root.hidden = true;
 
   const wlist = h('div', { class: 'bhq-wlist' });
   const wempty = h('p', { class: 'bhq-note', text: 'Nothing is waiting on you.', hidden: true });
@@ -812,12 +818,22 @@ function buildDock(floors, feed) {
   check.inner.append(cl, cnote);
   check.root.hidden = true;                                   // only while a check runs
 
+  const uchart = h('div', { class: 'bhq-uchart' });
+  const upace = h('p', { class: 'bhq-upace' });
+  const ujump = h('p', { class: 'bhq-ujump', hidden: true });
+  const ubots = h('ul', { class: 'bhq-ubots', role: 'list' });
+  const unote = h('p', { class: 'bhq-unote', hidden: true });
+  usage.inner.append(uchart, upace, ujump, ubots, unote);
+
   root.append(check.root, waiting.root, finished.root);
   document.body.append(root);
+  // Under the floor team, above Routines. The phone sheet carries the rail, slot included.
+  if (U.panel && U.panel.usageSlot) U.panel.usageSlot.append(usage.root);
   if (U.panel && U.panel.rail) U.panel.rail.append(routines.root);
 
   U.dock = {
-    root, check, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty, cl, cnote,
+    root, check, usage, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty, cl, cnote,
+    uchart, upace, ujump, ubots, unote, usageSig: null, usageRows: [], chartSig: null,
     lru: [], wrows: new Map(), crows: new Map(), checkT: null, finSig: null, finRefs: [], routSig: null, routRefs: [], copied: new Map(), blurred: false,
     floors, feed,
   };
@@ -825,8 +841,8 @@ function buildDock(floors, feed) {
   // open / folded: what the person left last time (the waiting card is open by default)
   let saved = null;
   try { saved = JSON.parse(lsGet(LS_DOCK) || 'null'); } catch { saved = null; }
-  for (const k of ['routines', 'finished', 'waiting']) { // waiting last: it is the one that stays open when there is no room for all
-    const fallback = k === 'waiting' || k === 'routines';
+  for (const k of ['routines', 'finished', 'usage', 'waiting']) { // waiting last: it is the one that stays open when there is no room for all
+    const fallback = k === 'waiting' || k === 'routines' || k === 'usage';
     setDockOpen(U.dock[k], saved && typeof saved[k] === 'boolean' ? saved[k] : fallback, false);
   }
   waiting.eye.addEventListener('click', () => setWaitBlur(!U.dock.blurred));
@@ -1100,8 +1116,8 @@ function setPhone(on, land) {
   html.classList.toggle('bhq-land', U.land);
   if (on && !was) {
     if (p) S.headSlot.append(p.teamHead);
-    // Banner, then the quiet "All clear" line, then the team. Routines (and the usage slot) ride in the rail.
-    S.body.append(...[U.need && U.need.root, d && d.waiting.root, p && p.tcard, p && p.rail, d && d.finished.root, S.feed].filter(Boolean));
+    // Banner, then the usage card, so both fit in the half-height sheet. The rail keeps Routines.
+    S.body.append(...[U.need && U.need.root, d && d.usage && d.usage.root, d && d.waiting.root, p && p.tcard, p && p.rail, d && d.finished.root, S.feed].filter(Boolean));
     S.open = S.start || U.land;
     S.start = false;
     sheetMeasure();
@@ -1118,6 +1134,7 @@ function setPhone(on, land) {
     if (p) {
       p.team.append(p.teamHead, p.tcard);
       if (p.rail) p.root.append(p.rail);
+      if (p.usageSlot && d && d.usage) p.usageSlot.append(d.usage.root);
       if (d && d.routines) p.rail.append(p.usageSlot, d.routines.root);
     }
     if (S.feed) { if (d && d.root.parentNode) d.root.parentNode.insertBefore(S.feed, d.root); else document.body.append(S.feed); }
@@ -1655,6 +1672,7 @@ function renderFeed(state) {
 
 function renderDock(state) {
   renderCheck(state);
+  renderUsage(state);
   renderWaiting(state);
   renderFinished(state);
   renderRoutines(state);
@@ -1664,6 +1682,183 @@ function renderDock(state) {
 function botFor(state, id, fallbackName) {
   const b = state.bots && state.bots[id];
   return b || { id, name: fallbackName || id, avatar: id };
+}
+
+/* Usage: a week chart, a plain-language pace, and who is using it.
+   Readings live on state.usageReadings (feed.js keeps them past ntfy's 12 h). */
+
+function botByName(state, name) {
+  const want = String(name || '').trim().toLowerCase();
+  const bots = state.bots || {};
+  for (const id of Object.keys(bots)) {
+    const b = bots[id];
+    if (b && String(b.name || '').trim().toLowerCase() === want) return b;
+  }
+  return { id: name, name, has_glb: false };
+}
+
+function shownShares(shares) {
+  if (shares.length <= 6) return shares;
+  const top = shares.slice(0, 5);
+  const rest = shares.slice(5).reduce((s, r) => s + r.share, 0);
+  top.push({ name: 'Other', share: rest, pct: Math.round(rest * 100), other: true });
+  return top;
+}
+
+function jumpText(j) {
+  const rounded = Math.round(j.points * 10) / 10;
+  const pts = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const hr = Math.max(1, Math.round(j.ms / 3600000));
+  return 'Up ' + pts + ' points in ' + hr + ' ' + (hr === 1 ? 'hour' : 'hours');
+}
+
+function renderUsage(state) {
+  const d = U.dock;
+  const card = d.usage;
+  const now = nowMs();
+  const view = analyzeUsage(state.usageReadings, now);
+  const slot = U.panel && U.panel.usageSlot;
+  setHidden(card.root, !view.show);
+  if (slot) setHidden(slot, !view.show);
+  if (!view.show) return;
+
+  const pct = Math.round(view.latest.total);
+  setText(card.count, pct + '%');
+  setAttr(card.count, 'data-s', view.jump ? 'waiting_user' : null);
+  setAttr(card.root, 'data-alert', view.jump ? 'jump' : null);
+  setAttr(card.toggle, 'title', view.pace.text || null);
+  card.rows = Math.max(1, view.shares.length);
+  setCls(card.root, 'has-rows', true);
+
+  setText(d.upace, view.pace.text);
+  setHidden(d.ujump, !view.jump);
+  if (view.jump) setText(d.ujump, jumpText(view.jump));
+  setHidden(d.unote, !view.heavy);
+  if (view.heavy) setText(d.unote, view.heavy.name + ' is ' + view.heavy.pct + '% of this week\'s usage');
+
+  const minute = Math.floor(now / 60000);
+  const csig = view.points.map((p) => p.t + '@' + p.total).join(',')
+    + '|' + view.start + '|' + view.end
+    + '|' + (view.proj ? Math.round(view.proj.t) + '@' + view.proj.total.toFixed(2) : '')
+    + '|' + (view.jump ? '1' : '0') + '|' + minute;
+  if (csig !== d.chartSig) {
+    d.chartSig = csig;
+    paintUsageChart(d.uchart, view, now);
+  }
+
+  const shares = shownShares(view.shares);
+  const sig = shares.map((s) => s.name + ':' + s.pct + ':' + (s.share >= 0.7 && !s.other ? '1' : '0')).join('|');
+  if (sig !== d.usageSig) {
+    d.usageSig = sig;
+    d.ubots.textContent = '';
+    d.usageRows = shares.map((s) => {
+      const heavy = !s.other && s.share >= 0.7;
+      const av = s.other ? null : makeAva({ orb: true });
+      const name = h('b', { class: 'bhq-uname', text: s.name, title: s.name });
+      const num = h('span', { class: 'bhq-upct bhq-num', text: s.pct + '%' });
+      const bar = h('i');
+      const li = h('li', { class: 'bhq-urow' + (heavy ? ' is-heavy' : '') },
+        av ? av.root : h('span', { class: 'bhq-uother', 'aria-hidden': 'true' }),
+        h('div', { class: 'bhq-umain' },
+          h('div', { class: 'bhq-utop' }, name, num),
+          h('span', { class: 'bhq-ubar' }, bar)));
+      setVar(bar, '--p', (s.share > 0 ? Math.max(s.share, 0.02) : 0).toFixed(3));
+      d.ubots.append(li);
+      return { name: s.name, av };
+    });
+  }
+  for (const row of d.usageRows) {
+    if (!row.av) continue;
+    const bot = botByName(state, row.name);
+    setAvatar(row.av, bot, bot.effective_status || bot.status || null);
+  }
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) {
+  const n = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const k of Object.keys(attrs)) if (attrs[k] != null) n.setAttribute(k, String(attrs[k]));
+  return n;
+}
+
+function paintUsageChart(host, view, now) {
+  host.textContent = '';
+  const W = 280, H = 78, L = 26, R = 8, T = 6, B = 14;
+  const iw = W - L - R, ih = H - T - B;
+  const start = view.start, end = view.end;
+  const span = Math.max(1, end - start);
+  let yMax = 100;
+  for (const p of view.points) if (p.total > yMax) yMax = p.total;
+  if (view.proj && view.proj.total > yMax) yMax = view.proj.total;
+  const xOf = (t) => L + iw * Math.min(1, Math.max(0, (t - start) / span));
+  const yOf = (v) => T + ih * (1 - Math.min(yMax, Math.max(0, v)) / yMax);
+  const n1 = (v) => String(Math.round(v * 10) / 10);
+  const pts = view.points;
+  const lo = pts.length ? Math.round(pts[0].total) : 0;
+  const hi = pts.length ? Math.round(pts[pts.length - 1].total) : 0;
+
+  const svg = svgEl('svg', {
+    viewBox: '0 0 ' + W + ' ' + H,
+    role: 'img',
+    class: 'bhq-usvg' + (view.jump ? ' is-alert' : ''),
+    'aria-label': pts.length > 1 && lo !== hi ? 'Usage this week, from ' + lo + '% to ' + hi + '%' : 'Usage this week, ' + hi + '%',
+  });
+
+  for (const g of [0, 0.5, 1]) {
+    const y = yOf(yMax * g);
+    svg.append(svgEl('line', { class: 'bhq-ugrid', x1: L, x2: W - R, y1: n1(y), y2: n1(y) }));
+    const label = g === 1 ? String(Math.round(yMax)) : g === 0.5 ? String(Math.round(yMax / 2)) : '0';
+    const text = svgEl('text', { class: 'bhq-ulabel', x: L - 4, y: n1(y + 3), 'text-anchor': 'end' });
+    text.textContent = label;
+    svg.append(text);
+  }
+
+  const noon = new Date(start);
+  noon.setHours(12, 0, 0, 0);
+  if (noon.getTime() < start) noon.setDate(noon.getDate() + 1);
+  for (let i = 0; i < 8 && noon.getTime() <= end; i++) {
+    const x = Math.min(W - R - 12, Math.max(L + 12, xOf(noon.getTime())));
+    const text = svgEl('text', { class: 'bhq-ulabel bhq-uday', x: n1(x), y: H - 3, 'text-anchor': 'middle' });
+    text.textContent = WEEKDAY[noon.getDay()];
+    svg.append(text);
+    noon.setDate(noon.getDate() + 1);
+  }
+
+  if (pts.length >= 2) {
+    let d = '';
+    pts.forEach((p, i) => { d += (i ? 'L' : 'M') + n1(xOf(p.t)) + ' ' + n1(yOf(p.total)); });
+    const area = d
+      + 'L' + n1(xOf(pts[pts.length - 1].t)) + ' ' + n1(yOf(0))
+      + 'L' + n1(xOf(pts[0].t)) + ' ' + n1(yOf(0)) + 'Z';
+    svg.append(svgEl('path', { class: 'bhq-uarea', d: area }));
+    svg.append(svgEl('path', { class: 'bhq-uline', d, fill: 'none' }));
+  }
+
+  if (view.proj && pts.length) {
+    const last = pts[pts.length - 1];
+    const x1 = xOf(last.t), x2 = xOf(view.proj.t);
+    if (x2 > x1 + 1) {
+      svg.append(svgEl('line', {
+        class: 'bhq-uproj',
+        x1: n1(x1), y1: n1(yOf(last.total)),
+        x2: n1(x2), y2: n1(yOf(view.proj.total)),
+      }));
+    }
+  }
+
+  if (now > start && now < end) {
+    const x = xOf(now);
+    svg.append(svgEl('line', { class: 'bhq-unow', x1: n1(x), x2: n1(x), y1: T, y2: n1(yOf(0)) }));
+  }
+
+  pts.forEach((p, i) => {
+    svg.append(svgEl('circle', {
+      class: i === pts.length - 1 ? 'bhq-udot bhq-udot--last' : 'bhq-udot',
+      cx: n1(xOf(p.t)), cy: n1(yOf(p.total)), r: i === pts.length - 1 ? 3.2 : 2,
+    }));
+  });
+
+  host.append(svg);
 }
 
 /* Status check: the setup bot posted {"check":{"bots":[…]}} and messaged every bot; a tick for each one whose own status
