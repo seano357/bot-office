@@ -63,7 +63,7 @@
    Lit from above, a slow light inside, a short soft shadow (it sits on white, not on a dark sky). */
 
 .bhq-surface {
-  --base: #232327; --glow: #6E6E78; --hi: #F2F2F7; --mid: #B4B4BA; --dim: #8E8E96; --g1: .2; --g2: .09;
+  --base: #232327; --glow: #6E6E78; --hi: #F2F2F7; --mid: #C8C8D0; --dim: #C8C8D0; --g1: .2; --g2: .09;
   position: relative; overflow: hidden; isolation: isolate;
   color: var(--hi);
   background: linear-gradient(180deg, rgba(255, 255, 255, .07), transparent 45%, rgba(0, 0, 0, .14)), var(--base);
@@ -173,7 +173,8 @@
 /* one big number: how many are working */
 .bhq-schip--lead { gap: 7px; padding: 0 14px 0 12px; color: var(--hi); font-size: 14px; }
 .bhq-schip--lead b { font-size: 22px; letter-spacing: -.02em; }
-.bhq-schip.is-zero { opacity: .5; }
+.bhq-schip.is-zero .bhq-dot { opacity: .4; }
+.bhq-schip.is-zero b { color: var(--hi); }
 .bhq-schip.is-alert { opacity: 1; }
 .bhq-schip.is-alert[data-s="waiting_user"] { background: linear-gradient(90deg, rgba(255, 178, 58, .3), rgba(255, 178, 58, .14)); color: #FFE2A6; }
 .bhq-schip.is-alert[data-s="waiting_user"] b { color: #FFF0CC; }
@@ -288,7 +289,8 @@
 .bhq-tcounts span { display: flex; justify-content: space-between; gap: 14px; transition: opacity .4s ease; }
 .bhq-tcounts em { font-style: normal; color: var(--mid); }
 .bhq-tcounts b { font-weight: 900; }
-.bhq-tcounts .is-zero { opacity: .5; }
+.bhq-tcounts .is-zero b { color: var(--hi); }
+.bhq-tcounts .is-zero em { color: #C8C8D0; }
 
 .bhq-tcard { min-height: 0; flex: 0 1 auto; padding: 8px; border-radius: 24px; display: flex; flex-direction: column; }
 .bhq-members { min-height: 0; overflow-y: auto; }
@@ -377,19 +379,24 @@
 
 /* ====================================================================== live feed */
 
-#feed { padding: 14px 16px 12px; border-radius: 22px; }
+#feed { padding: 14px 16px 12px; border-radius: 22px; display: flex; flex-direction: column; overflow: hidden; }
 #feed .bhq-fhead { padding: 0 0 8px; }
-.bhq-frows { display: flex; flex-direction: column; }
+.bhq-frows { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .bhq-frow {
-  display: flex; align-items: center; gap: 9px; height: 26px; overflow: hidden;
-  font: 800 12.5px/1 var(--bhq-round); color: var(--mid); white-space: nowrap;
+  display: flex; align-items: flex-start; gap: 9px; min-height: 22px; padding: 3px 0; overflow: hidden;
+  font: 800 12.5px/1.35 var(--bhq-round); color: var(--mid);
 }
-.bhq-frow time { flex: none; width: 36px; color: var(--dim); }
-.bhq-frow .bhq-dot { width: 6px; height: 6px; box-shadow: none; }
-.bhq-ftxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.bhq-frow b { color: var(--hi); font-weight: 900; }
-.bhq-frow.is-new { animation: bhq-row-in .5s var(--bhq-spring) both; }
-.bhq-frow.is-out { animation: bhq-row-out .42s var(--bhq-ease) both; pointer-events: none; }
+.bhq-frow time { flex: none; width: 34px; padding-top: 1px; color: #C8C8D0; }
+.bhq-frow .bhq-dot { width: 7px; height: 7px; margin-top: 5px; box-shadow: none; }
+.bhq-ftxt {
+  min-width: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.bhq-fstep { overflow-wrap: anywhere; }
+.bhq-frow b { color: var(--hi); font-weight: 900; margin-right: 6px; }
+.bhq-frow.is-cont { padding-top: 0; }
+.bhq-frow.is-new { animation: bhq-row-in .45s var(--bhq-spring) both; }
+.bhq-frow.is-out { animation: bhq-row-out .35s var(--bhq-ease) both; pointer-events: none; }
 
 /* ====================================================================== zoom */
 
@@ -520,8 +527,65 @@
 .bhq-ckrow[data-ok="no"] .bhq-ckat { color: #FFB8BF; }
 .bhq-cknote { padding-top: 4px; }
 
-/* the floor team: how long each bot has been silent; work the usage meter saw but no status line reported */
-.bhq-mseen { flex: none; align-self: center; margin-left: 4px; color: var(--dim); font: 800 11.5px/1 var(--bhq-round); }
+/* the floor team: how long each bot has been silent. The dot-equivalent is the colour, the digits stay light. */
+.bhq-mseen { flex: none; align-self: center; margin-left: 4px; color: #C8C8D0; font: 800 11.5px/1 var(--bhq-round); }
+.bhq-mseen[data-age="stale"] { color: #FFC14D; }
+.bhq-mseen[data-age="old"] { color: #FF8D86; }
+
+/* right rail: routines, and an empty slot the usage burn-rate card mounts into */
+.bhq-rail { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 0 1 auto; pointer-events: none; }
+.bhq-rail > * { pointer-events: auto; }
+.bhq-team { flex: 1 1 auto; }
+.bhq-usage-slot:empty { display: none; }
+.bhq-rail .bhq-dcard.is-open.has-rows { max-height: min(280px, 36vh); }
+
+/* "All clear": one quiet line, not an empty expandable card */
+.bhq-dcard.is-clear { min-height: 0; }
+.bhq-dcard.is-clear .bhq-dtoggle { height: 36px; cursor: default; padding-right: 16px; }
+.bhq-dcard.is-clear .bhq-dtoggle:hover { background: none; }
+.bhq-dcard.is-clear .bhq-chev,
+.bhq-dcard.is-clear .bhq-dbody { display: none; }
+.bhq-dcard.is-clear .bhq-dtitle { color: #C8C8D0; font-weight: 800; }
+
+/* routines stay read-only; Chat is a link, not a switch */
+.bhq-rchat {
+  flex: none; height: 26px; padding: 0 11px; border-radius: 13px;
+  background: rgba(255, 255, 255, .12); color: var(--hi); font: 800 11.5px/1 var(--bhq-round);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+}
+.bhq-rchat:hover { background: rgba(255, 255, 255, .22); }
+.bhq-skel-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 12px; }
+.bhq-skel {
+  display: block; height: 12px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .18), rgba(255, 255, 255, .05));
+  background-size: 200% 100%;
+  animation: bhq-skel 1.15s ease-in-out infinite;
+}
+.bhq-untracked { margin: 0 0 12px; color: #C8C8D0; }
+
+/* needs-you: a bright amber (or red, if anyone is in error) strip under the counters */
+.bhq-need {
+  position: fixed; z-index: 24; top: 78px; left: 50%; translate: -50% 0;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  width: max-content; max-width: min(640px, calc(100vw - var(--floors-w, 212px) - var(--panel-w, 352px) - 72px));
+  pointer-events: none;
+}
+.bhq-need-btn, .bhq-need-more {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 14px 0 12px; border-radius: 20px;
+  font: 800 13.5px/1.2 var(--bhq-round); color: #2A1A04; text-align: left;
+  background: linear-gradient(180deg, #FFE7B8, #FFB020);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .65), 0 8px 22px rgba(255, 160, 20, .32);
+}
+.bhq-need-btn[data-s="error"], .bhq-need[data-s="error"] .bhq-need-more {
+  color: #2A0A0C;
+  background: linear-gradient(180deg, #FFD4D6, #FF6A62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 8px 22px rgba(255, 60, 48, .32);
+}
+.bhq-need-btn[data-s="stuck"] { background: linear-gradient(180deg, #FFE0B0, #FF9F0A); }
+.bhq-need-txt { overflow-wrap: anywhere; }
+.bhq-need .bhq-dot { background: #2A1A04; box-shadow: none; }
+.bhq-need-btn[data-s="error"] .bhq-dot { background: #2A0A0C; }
 .bhq-mstep[data-u] { color: #B9CCFF; }
 
 /* ====================================================================== motion */
@@ -531,14 +595,15 @@
 @keyframes bhq-note { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes bhq-flow { from { transform: translate(-14%, 0) scale(1); } to { transform: translate(10%, 10%) scale(1.15); } }
 @keyframes bhq-flow2 { from { transform: translate(0, 0); } to { transform: translate(34%, -18%) scale(1.2); } }
-@keyframes bhq-row-in { from { opacity: 0; transform: translateY(-10px); height: 0; } to { opacity: 1; transform: none; height: 26px; } }
-@keyframes bhq-row-out { from { opacity: 1; height: 26px; } to { opacity: 0; height: 0; } }
+@keyframes bhq-row-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes bhq-row-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bhq-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes bhq-live { 0%, 100% { box-shadow: 0 0 0 3px rgba(52, 199, 89, .2), 0 0 4px rgba(52, 199, 89, .5); } 50% { box-shadow: 0 0 0 5px rgba(52, 199, 89, .05), 0 0 4px rgba(52, 199, 89, .5); } }
 
 .is-enter { animation: bhq-enter .45s var(--bhq-spring) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .bhq-surface, .bhq-glow::before, .bhq-glow::after, .bhq-live-dot, .is-enter, .bhq-frow.is-new, .bhq-frow.is-out, .bhq-rrow.is-copied .bhq-rnote { animation: none !important; }
+  .bhq-surface, .bhq-glow::before, .bhq-glow::after, .bhq-live-dot, .is-enter, .bhq-frow.is-new, .bhq-frow.is-out, .bhq-rrow.is-copied .bhq-rnote, .bhq-skel { animation: none !important; }
   .bhq-shaft.is-ready .bhq-car, .bhq-floor, .bhq-fnum, .bhq-schip, .bhq-slider i, .bhq-cta, .bhq-dbody, .bhq-dbody-in, .bhq-chev, .bhq-av-img, .bhq-wlist { transition: none !important; }
 }
 
@@ -547,12 +612,11 @@
   .bhq-surface { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35), 0 5px 16px rgba(18, 22, 34, .13); }
 }
 
-/* ====================================================================== shorter windows: a tighter floors card and a two-line feed, so the dock keeps its room */
+/* ====================================================================== shorter windows: a tighter floors card, so the dock keeps its room */
 
 @media (max-height: 860px) {
   .bhq-floor { min-height: 46px; padding-top: 5px; padding-bottom: 5px; }
   .bhq-fdots { margin-top: 3px; }
-  .bhq-frow:nth-child(n+3) { display: none; }
 }
 
 /* ====================================================================== narrower windows */
@@ -602,9 +666,11 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
    visible seam, and the building reads bigger: it is as wide as the box), then moved so that its centre is the centre
    of the free space between the chip row and whatever covers the bottom (--bhq-vis: the sheet or the bot card). */
 .bhq-phone #scene {
-  inset: -60px -15%;
-  translate: 0 calc((var(--bhq-st) + var(--bhq-top) - var(--bhq-vis, 95px) + 24px) / 2); /* +: the camera rests a little above its box centre */
-  will-change: translate;
+  inset: auto; left: 0; right: 0;
+  top: calc(var(--bhq-st) + var(--bhq-top) - 8px);
+  bottom: calc(var(--bhq-vis, 50dvh) - 28px);
+  translate: none;
+  will-change: auto;
 }
 
 /* ---------- top row: the mark, the counts, the usage; scrolls sideways instead of being cut ---------- */
@@ -635,7 +701,13 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
 }
 .bhq-phone .bhq-right { gap: 6px; min-height: 42px; flex-direction: row-reverse; } /* usage first, DEMO last */
 .bhq-phone .bhq-usage { height: 42px; padding: 0 13px; gap: 0; }
-.bhq-phone .bhq-usage :is(.bhq-usage-label, .bhq-slider, .bhq-sep, .bhq-reset) { display: none; }
+.bhq-phone .bhq-usage :is(.bhq-slider, .bhq-sep, .bhq-reset) { display: none; }
+.bhq-phone .bhq-usage { gap: 5px; }
+.bhq-phone .bhq-usage-pct { order: 1; }
+.bhq-phone .bhq-usage-label {
+  order: 2; display: inline; font: 800 10px/1 var(--bhq-round);
+  letter-spacing: .04em; text-transform: lowercase; color: #C8C8D0;
+}
 .bhq-phone .bhq-demo { height: 28px; padding: 0 8px; font-size: 10px; letter-spacing: .06em; }
 
 /* ---------- floors: a horizontal chip row ---------- */
@@ -646,9 +718,20 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
 }
 .bhq-phone #floors::before, .bhq-phone #floors::after { display: none; }
 .bhq-phone .bhq-fhead, .bhq-phone .bhq-car, .bhq-phone .bhq-fdots { display: none; }
+.bhq-phone #floors { overflow: hidden; }
 .bhq-phone .bhq-fscroll {
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
-  padding: 2px calc(12px + var(--bhq-sr)) 10px calc(12px + var(--bhq-sl)); scroll-padding-inline: 12px;
+  width: 100%;
+  padding: 2px calc(16px + var(--bhq-sr)) 10px max(16px, calc(14px + var(--bhq-sl)));
+  scroll-padding-inline: 16px;
+}
+.bhq-phone .bhq-fscroll.can-more {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+.bhq-phone .bhq-fscroll.is-scrolled {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 22px), transparent);
+          mask-image: linear-gradient(to right, transparent, #000 18px, #000 calc(100% - 22px), transparent);
 }
 .bhq-phone .bhq-shaft { flex-direction: row; gap: 8px; width: max-content; }
 .bhq-phone .bhq-floor {
@@ -674,7 +757,7 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
 .bhq-sheet, .bhq-sprobe { display: none; }
 .bhq-phone .bhq-sheet {
   display: flex; flex-direction: column;
-  position: fixed; z-index: 21; left: 0; right: 0; bottom: 0; height: 60vh; height: 60dvh;
+  position: fixed; z-index: 21; left: 0; right: 0; bottom: 0; height: 50vh; height: 50dvh;
   border-radius: 28px 28px 0 0; color: #F2F2F7;
   background: rgba(26, 26, 30, .92);
   -webkit-backdrop-filter: blur(28px) saturate(160%); backdrop-filter: blur(28px) saturate(160%);
@@ -717,15 +800,20 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
   animation: none; background: rgba(255, 255, 255, .06); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
 }
 .bhq-phone .bhq-sheet .bhq-glow::before, .bhq-phone .bhq-sheet .bhq-glow::after { display: none; }
-.bhq-phone .bhq-sheet .bhq-dcard[data-dock="waiting"]:not(.has-rows) { display: none; } /* waiting on me: only when someone is */
+/* the banner already names whoever needs you; the list would push the team below the fold */
+.bhq-phone .bhq-sheet .bhq-need:not([hidden]) ~ .bhq-dcard[data-dock="waiting"] { display: none; }
+.bhq-phone .bhq-sheet .bhq-need {
+  position: static; translate: none; left: auto; top: auto; width: auto; max-width: none;
+  flex-direction: column; align-items: stretch;
+}
+.bhq-phone .bhq-sheet .bhq-need-btn, .bhq-phone .bhq-sheet .bhq-need-more { width: 100%; }
 .bhq-phone .bhq-sheet .bhq-dcard { flex: none; }
 .bhq-phone .bhq-sheet .bhq-tcard { padding: 6px; flex: none; }
 .bhq-phone .bhq-sheet .bhq-members { overflow: visible; }
 .bhq-phone .bhq-sheet .bhq-member { min-height: 56px; }
 .bhq-phone .bhq-sheet #feed {
-  position: static; width: auto; display: block; padding: 14px 16px 12px; border-radius: 22px;
+  position: static; width: auto; right: auto; max-height: none; display: block; padding: 14px 16px 12px; border-radius: 22px;
 }
-.bhq-phone .bhq-sheet .bhq-frow:nth-child(n+3) { display: flex; }
 /* small buttons keep their look but get a 44 px hit area */
 /* (the eye is already absolutely positioned, so it anchors its own hit area) */
 .bhq-phone .bhq-sheet :is(.bhq-wbtn, .bhq-roff) { position: relative; }

@@ -1,9 +1,12 @@
 /*
  * Bot HQ UI: live cards on top of the full-bleed 3D scene (CONTRACT v2.3; look = the wallpaper's cards, web/face/face.css).
- *   top-left   brand + live clock         top-center  status counters        top-right  DEMO + usage meter
- *   left       floors "elevator"          right       floor team / bot card
- *   left, under the floors   dock: Status check (while one runs) / Waiting on me / Finished / Routines
- *   bottom-left activity feed (last 4)    bottom-right (left of the card)  zoom - / +
+ *   top-left   brand + live clock         top-center  status counters + needs-you banner
+ *   left       floors "elevator"          right       floor team / bot card, usage slot, routines
+ *   left, under the floors   dock: Status check (while one runs) / Waiting on me / Finished
+ *   bottom     activity feed (wider, last 6)    zoom - / + sits at the right of the feed
+ *
+ *   #bhq-usage-slot (in the right rail, above Routines) is empty on purpose: a separate change
+ *   mounts the usage burn-rate card there. The node moves into the phone sheet with the rail.
  *
  *   initUI({ onSelectBot, onSelectFloor, onZoom, onOpenChat })
  *   renderUI(state, { currentFloor, selectedBot })   // idempotent, cheap, safe to call every second
@@ -29,8 +32,8 @@
 const THUMB_BASE = new URL('../../assets/blobs/thumbs/', import.meta.url).href;
 // the product logo, exactly as is (a 400x400 square), shown small in the brand pill
 const MARK_SRC = new URL('../../assets/brand/logo-mark.png', import.meta.url).href;
-const FEED_ROWS = 4;
-const STEPS_SHOWN = 3;
+const FEED_ROWS = 7;
+const STEPS_SHOWN = 4;
 const FEED_OUT_MS = 420;
 const FINISHED_MAX = 60;
 const DAY_MS = 24 * 3600 * 1000;
@@ -283,6 +286,38 @@ function fmtHours(min) {
 }
 
 function effStatus(bot) { return (bot && (bot.effective_status || bot.status)) || 'idle'; }
+
+// What the cards show. A wait, an error or a stuck line stays that way even when a payload's
+// effective_status has already been decayed to idle (the pill was saying Resting over that line).
+function shownStatus(bot) {
+  if (!bot) return 'idle';
+  const line = (bot.history && bot.history[0] && bot.history[0].status) || bot.status;
+  if (line === 'waiting_user' || line === 'error' || line === 'stuck') return line;
+  const eff = effStatus(bot);
+  if (eff === 'waiting_user' || eff === 'error' || eff === 'stuck') return eff;
+  return eff;
+}
+function needsAttention(bot) {
+  const s = shownStatus(bot);
+  return s === 'waiting_user' || s === 'error' || s === 'stuck';
+}
+// "just now", "14m", "11h", "2d" — banner and feed.
+function fmtWait(ms) {
+  const min = Math.floor(Math.max(0, ms) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return min + 'm';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h';
+  return Math.floor(hr / 24) + 'd';
+}
+// Last-heard colour: muted under 6h, amber from 6h, red from 24h.
+function heardAge(ms) {
+  if (ms == null) return 'none';
+  const h = (nowMs() - ms) / 3600000;
+  if (h >= 24) return 'old';
+  if (h >= 6) return 'stale';
+  return 'fresh';
+}
 function statusLabel(s) { return LABEL[s] || s || ''; }
 function isHex(c) { return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c || ''); }
 
@@ -348,7 +383,7 @@ function counts(state) {
   const bots = state.bots;
   if (bots && typeof bots === 'object' && Object.keys(bots).length) {
     for (const id of Object.keys(bots)) {
-      const s = effStatus(bots[id]);
+      const s = shownStatus(bots[id]);
       out[s] = (out[s] || 0) + 1;
     }
   } else if (state.summary && typeof state.summary === 'object') {
@@ -459,6 +494,7 @@ export function initUI(handlers) {
   buildFeed(feed);
   buildZoom();
   buildDock(floors, feed);
+  buildNeed();
   buildSheet(feed);
   watchPhone();
 
@@ -473,7 +509,7 @@ export function initUI(handlers) {
   // relative times ("12 min ago", "in 3 h") move on even when no new state arrives
   U.timer = setInterval(() => {
     if (document.hidden || !U.last.state) return;
-    safe('dock', () => U.dock && renderDock(U.last.state));
+    safe('tick', () => renderUI(U.last.state, U.last.opts));
   }, 15000);
 }
 
@@ -532,6 +568,7 @@ function buildFloors(root) {
   const count = h('b', { class: 'bhq-num' });
   const fscroll = h('div', { class: 'bhq-fscroll' }, shaft);
   root.append(h('div', { class: 'bhq-fhead' }, h('span', { text: 'Floors' }), count), fscroll);
+  fscroll.addEventListener('scroll', () => updateChipFade(), { passive: true });
   U.fl = { root, shaft, car, count, fscroll, carTop: null, carH: null, carShown: false, ready: false };
   if (typeof ResizeObserver === 'function') {
     U.ro = new ResizeObserver(() => placeCar());
@@ -574,6 +611,10 @@ function buildPanel(root) {
   const teamEmpty = h('p', { class: 'bhq-note', text: 'Nobody here yet. A bot shows up when it logs its first step.', hidden: true });
   const tcard = h('div', { class: 'bhq-tcard bhq-surface bhq-glow' }, list, teamEmpty);
   const team = h('section', { class: 'bhq-team', 'aria-label': 'Floor team' }, head, tcard);
+  // Empty on purpose. The usage burn-rate card (a separate change) mounts into this node;
+  // it sits under the floor team and above Routines, and the phone sheet carries it along.
+  const usageSlot = h('div', { id: 'bhq-usage-slot', class: 'bhq-usage-slot', 'data-slot': 'usage-burn' });
+  const rail = h('div', { class: 'bhq-rail' }, usageSlot);
 
   /* bot card: a hero tinted by the bot's status over a graphite details card */
   const close = h('button', { class: 'bhq-close', type: 'button', 'aria-label': 'Close bot card', title: 'Close (Esc)' }, svg(ICON.close));
@@ -600,18 +641,20 @@ function buildPanel(root) {
   };
   const sSteps = stat(), sTasks = stat(), sHours = stat('h worked');
   const stats = h('div', { class: 'bhq-stats' }, sSteps.root, sTasks.root, sHours.root);
+  const untracked = h('p', { class: 'bhq-note bhq-untracked', text: 'Not tracked yet', hidden: true });
 
   const usageLabel = h('div', { class: 'bhq-label' });
   const fillBar = h('i');
   const fuel = h('span', { class: 'bhq-slider', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Share of total usage' }, fillBar);
   const shareNum = h('b', { class: 'bhq-num' });
-  const share = h('span', { class: 'bhq-share' }, shareNum, ' of all');
+  const shareRest = h('span');
+  const share = h('span', { class: 'bhq-share' }, shareNum, shareRest);
   const useBlock = h('div', { class: 'bhq-useblock' }, usageLabel, h('div', { class: 'bhq-use' }, fuel, share));
 
   const hist = h('ol', { class: 'bhq-steps', role: 'list' });
   const stepsBlock = h('div', { class: 'bhq-stepsblock' }, h('div', { class: 'bhq-label', text: 'Recent steps' }), hist);
 
-  const body = watchFade(h('div', { class: 'bhq-card-body' }, taskBlock, stats, useBlock, stepsBlock));
+  const body = watchFade(h('div', { class: 'bhq-card-body' }, taskBlock, stats, untracked, useBlock, stepsBlock));
 
   const cta = h('button', { class: 'bhq-cta', type: 'button', text: 'Open chat', disabled: true, title: 'No chat link yet' });
   cta.addEventListener('click', () => {
@@ -624,13 +667,14 @@ function buildPanel(root) {
   const cgrab = h('span', { class: 'bhq-cgrab', 'aria-hidden': 'true' });
   const card = h('section', { class: 'bhq-card', hidden: true, 'aria-label': 'Bot card' }, cgrab, hero, more);
 
-  root.append(card, team);
+  root.append(card, team, rail);
 
   U.panel = {
     root, team, tcard, teamHead: head, teamTitle, teamSub, teamBig: big, nWait, nErr, rowWait, rowErr, lErr, list, teamEmpty,
+    rail, usageSlot,
     card: {
       root: card, hero, body, av, name, where, status, stDot, stTxt, now, taskBlock, task,
-      sSteps, sTasks, sHours, usageLabel, useBlock, fuel, fillBar, shareNum, hist, histSig: null, cta, fresh: true,
+      stats, sSteps, sTasks, sHours, untracked, usageLabel, useBlock, fuel, fillBar, shareNum, shareRest, hist, histSig: null, cta, fresh: true,
     },
   };
 }
@@ -669,9 +713,10 @@ function buildZoom() {
 
 function dockCard(id, title, opts) {
   const count = h('span', { class: 'bhq-dcount bhq-num', text: '0' });
+  const titleEl = h('span', { class: 'bhq-dtitle', text: title });
   const inner = watchFade(h('div', { class: 'bhq-dbody-in' }));
   const toggle = h('button', { class: 'bhq-dtoggle', type: 'button', 'aria-expanded': 'false' },
-    h('span', { class: 'bhq-dtitle', text: title }), count);
+    titleEl, count);
   const head = h('div', { class: 'bhq-dh' + (opts && opts.eye ? ' has-eye' : '') }, toggle);
   let eye = null;
   if (opts && opts.eye) {
@@ -682,8 +727,11 @@ function dockCard(id, title, opts) {
   head.append(svg(ICON.chev));
   const root = h('section', { class: 'bhq-dcard bhq-surface bhq-glow bhq-glow--still', 'aria-label': title, 'data-dock': id },
     head, h('div', { class: 'bhq-dbody' }, inner));
-  const card = { id, root, toggle, count, inner, eye, open: false, shown: false, rows: 0 };
-  toggle.addEventListener('click', () => setDockOpen(card, !card.shown));
+  const card = { id, title, titleEl, root, toggle, count, inner, eye, open: false, shown: false, rows: 0 };
+  toggle.addEventListener('click', () => {
+    if (card.root.classList.contains('is-clear')) return;
+    setDockOpen(card, !card.shown);
+  });
   return card;
 }
 
@@ -716,15 +764,17 @@ function setDockOpen(card, on, save = true) {
 function fitDock(avail) {
   const d = U.dock;
   d.avail = avail;
-  const cards = [d.check, d.waiting, d.finished, d.routines];
-  const live = cards.filter((c) => !c.root.hidden);
+  // Routines live in the right rail, so they don't compete for the left column's height.
+  const cards = [d.check, d.waiting, d.finished];
+  const live = cards.filter((c) => c && !c.root.hidden && !c.root.classList.contains('is-clear'));
   const on = new Set(live.filter((c) => c.open));
   const need = () => live.reduce((n, c) => n + (on.has(c) ? (c.rows ? DOCK_OPEN_MIN : DOCK_OPEN_EMPTY) : DOCK_HEAD), 0) + DOCK_GAP * Math.max(0, live.length - 1);
   while (on.size && need() > avail) {
     const victim = d.lru.find((c) => on.has(c)) || [...on][0]; // lru is oldest first
     on.delete(victim);
   }
-  for (const c of cards) paintDockCard(c, on.has(c));
+  for (const c of cards) if (c && !c.root.classList.contains('is-clear')) paintDockCard(c, on.has(c));
+  if (d.routines) paintDockCard(d.routines, !!d.routines.open && !d.routines.root.hidden);
 }
 
 function setWaitBlur(on, save = true) {
@@ -739,7 +789,7 @@ function setWaitBlur(on, save = true) {
 }
 
 function buildDock(floors, feed) {
-  const root = own(h('aside', { class: 'bhq-dock', 'aria-label': 'Waiting on me, finished work and routines' }));
+  const root = own(h('aside', { class: 'bhq-dock', 'aria-label': 'Waiting on me and finished work' }));
   const check = dockCard('check', 'Status check');
   const waiting = dockCard('waiting', 'Waiting on me', { eye: true });
   const finished = dockCard('finished', 'Finished');
@@ -762,8 +812,9 @@ function buildDock(floors, feed) {
   check.inner.append(cl, cnote);
   check.root.hidden = true;                                   // only while a check runs
 
-  root.append(check.root, waiting.root, finished.root, routines.root);
+  root.append(check.root, waiting.root, finished.root);
   document.body.append(root);
+  if (U.panel && U.panel.rail) U.panel.rail.append(routines.root);
 
   U.dock = {
     root, check, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty, cl, cnote,
@@ -775,7 +826,8 @@ function buildDock(floors, feed) {
   let saved = null;
   try { saved = JSON.parse(lsGet(LS_DOCK) || 'null'); } catch { saved = null; }
   for (const k of ['routines', 'finished', 'waiting']) { // waiting last: it is the one that stays open when there is no room for all
-    setDockOpen(U.dock[k], saved && typeof saved[k] === 'boolean' ? saved[k] : k === 'waiting', false);
+    const fallback = k === 'waiting' || k === 'routines';
+    setDockOpen(U.dock[k], saved && typeof saved[k] === 'boolean' ? saved[k] : fallback, false);
   }
   waiting.eye.addEventListener('click', () => setWaitBlur(!U.dock.blurred));
   setWaitBlur(lsGet(LS_BLUR) === '1', false);
@@ -796,7 +848,7 @@ function shown(el) { return !!el && el.getClientRects().length > 0; }
 function layoutDock() {
   const d = U && U.dock;
   if (!d) return;
-  if (U.phone) { fitDock(Infinity); updateFades(); return; } // in the sheet the cards simply stack and the sheet scrolls
+  if (U.phone) { fitDock(Infinity); updateFades(); updateChipFade(); return; } // in the sheet the cards simply stack and the sheet scrolls
   const gutter = 24;
   // offsetTop/offsetHeight ignore the cards' entrance transform
   const top = shown(d.floors) ? d.floors.offsetTop + d.floors.offsetHeight + 10 : 96;
@@ -889,7 +941,7 @@ function buildSheet(feed) {
   const root = own(h('div', { class: 'bhq-sheet', role: 'region', 'aria-label': 'Floor panel' }, peek, body, probe));
   document.body.append(root);
   const S = U.sh = { root, peek, body, grab, headSlot, probe, feed, y: 0, H: 0, travel: 0, vis0: 132, open: false, busy: false, cancel: null };
-  S.start = new URLSearchParams(location.search).get('sheet') === 'open';
+  S.start = new URLSearchParams(location.search).get('sheet') !== 'closed'; // half height unless ?sheet=closed
 
   const move = (y) => {
     const t = S.travel;
@@ -1048,7 +1100,8 @@ function setPhone(on, land) {
   html.classList.toggle('bhq-land', U.land);
   if (on && !was) {
     if (p) S.headSlot.append(p.teamHead);
-    S.body.append(...[d && d.waiting.root, p && p.tcard, d && d.finished.root, d && d.routines.root, S.feed].filter(Boolean));
+    // Banner, then the quiet "All clear" line, then the team. Routines (and the usage slot) ride in the rail.
+    S.body.append(...[U.need && U.need.root, d && d.waiting.root, p && p.tcard, p && p.rail, d && d.finished.root, S.feed].filter(Boolean));
     S.open = S.start || U.land;
     S.start = false;
     sheetMeasure();
@@ -1060,8 +1113,13 @@ function setPhone(on, land) {
     S.body.style.opacity = '';
     S.body.inert = false;
     cardReset();
-    if (d) d.root.append(d.waiting.root, d.finished.root, d.routines.root);
-    if (p) p.team.append(p.teamHead, p.tcard);
+    if (U.need) document.body.append(U.need.root);
+    if (d) d.root.append(d.check.root, d.waiting.root, d.finished.root);
+    if (p) {
+      p.team.append(p.teamHead, p.tcard);
+      if (p.rail) p.root.append(p.rail);
+      if (d && d.routines) p.rail.append(p.usageSlot, d.routines.root);
+    }
     if (S.feed) { if (d && d.root.parentNode) d.root.parentNode.insertBefore(S.feed, d.root); else document.body.append(S.feed); }
     for (const k of Object.keys(rootVars)) document.documentElement.style.removeProperty(k);
     rootVars = {};
@@ -1096,6 +1154,7 @@ export function renderUI(state, opts) {
   safe('panel', () => U.panel && renderPanel(state, o));
   safe('feed', () => U.feed && renderFeed(state));
   safe('dock', () => U.dock && renderDock(state));
+  safe('need', () => U.need && renderNeed(state));
   safe('zoom', () => {
     if (U.zoom && !U.zoom.root.isConnected) document.body.append(U.zoom.root);
   });
@@ -1203,11 +1262,11 @@ function renderFloors(state, o) {
     // one tiny lit dot per bot, in desk order
     while (r.dotEls.length < ids.length) { const d = h('i', { class: 'bhq-dot' }); r.dotEls.push(d); r.dots.append(d); }
     while (r.dotEls.length > ids.length) r.dotEls.pop().remove();
-    ids.forEach((id, k) => setAttr(r.dotEls[k], 'data-s', effStatus(bots[id])));
+    ids.forEach((id, k) => setAttr(r.dotEls[k], 'data-s', shownStatus(bots[id])));
     // phones: a corner dot on the chip of a floor where someone needs you (the dots row is hidden there)
     let need = null;
     for (const id of ids) {
-      const st = effStatus(bots[id]);
+      const st = shownStatus(bots[id]);
       if (st === 'error') { need = 'error'; break; }
       if (st === 'waiting_user' || st === 'stuck') need = 'waiting_user';
     }
@@ -1226,9 +1285,11 @@ function renderFloors(state, o) {
   reconcile(f.shaft, list.map((x) => U.floors.get(x.id).btn), 1); // child 0 is the car
   placeCar();
   centerChip(activeId);
+  if (U.phone) updateChipFade();
 }
 
-// phones: the floors are a scrolling chip row; bring the active chip to the middle when the floor changes
+// phones: the floors are a scrolling chip row. Reveal the active chip with the minimum scroll,
+// so the first chip stays whole at the left instead of being centred off the edge.
 function centerChip(activeId) {
   const f = U.fl;
   if (!U.phone || !activeId || U.chipFloor === activeId) return;
@@ -1237,7 +1298,19 @@ function centerChip(activeId) {
   const first = U.chipFloor == null;
   U.chipFloor = activeId;
   const sc = f.fscroll, b = r.btn.getBoundingClientRect(), s = sc.getBoundingClientRect();
-  sc.scrollTo({ left: Math.max(0, sc.scrollLeft + (b.left - s.left) - (s.width - b.width) / 2), behavior: first || reducedMotion.matches ? 'auto' : 'smooth' });
+  const pad = 14;
+  let delta = 0;
+  if (b.right > s.right - pad) delta = b.right - (s.right - pad);
+  else if (b.left < s.left + pad) delta = b.left - (s.left + pad);
+  if (delta) sc.scrollTo({ left: Math.max(0, sc.scrollLeft + delta), behavior: first || reducedMotion.matches ? 'auto' : 'smooth' });
+  updateChipFade();
+}
+
+function updateChipFade() {
+  const sc = U.fl && U.fl.fscroll;
+  if (!sc) return;
+  setCls(sc, 'is-scrolled', sc.scrollLeft > 6);
+  setCls(sc, 'can-more', sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 6);
 }
 
 // The lit pill is one element that slides between floors (the "elevator car").
@@ -1276,8 +1349,9 @@ function renderPanel(state, o) {
   const focusInTeam = p.team.contains(document.activeElement);
   const focusInCard = p.card.root.contains(document.activeElement);
 
-  if (mode !== prevMode) { // the cards inside spring in by themselves when they become visible
+    if (mode !== prevMode) { // the cards inside spring in by themselves when they become visible
     setHidden(p.team, mode === 'card');
+    setHidden(p.rail, mode === 'card');
     setHidden(p.card.root, mode === 'team');
     U.mode = mode;
     if (mode === 'card') cardReset();
@@ -1336,7 +1410,7 @@ function renderTeam(state, floor, o) {
   const n = ids.length;
   let working = 0, waiting = 0, errors = 0;
   for (const id of ids) {
-    const s = effStatus(bots[id]);
+    const s = shownStatus(bots[id]);
     if (s === 'working') working++;
     else if (s === 'waiting_user' || s === 'stuck') waiting++;
     else if (s === 'error') errors++;
@@ -1360,7 +1434,7 @@ function renderTeam(state, floor, o) {
     let c = U.cells.get(id);
     if (!c) { c = makeCell(id); U.cells.set(id, c); }
     const bot = bots[id];
-    const s = effStatus(bot);
+    const s = shownStatus(bot);
     setAvatar(c.av, bot, s);
     setText(c.name, bot.name || id);
     const unrep = s === 'idle' ? unreportedText(bot) : '';
@@ -1368,8 +1442,10 @@ function renderTeam(state, floor, o) {
     setText(c.step, unrep || (quiet ? statusLabel(s) : bot.step || statusLabel(s)));
     setAttr(c.step, 'data-u', unrep ? '' : null);
     const seenAt = parseTs(bot.last_seen);
+    const age = heardAge(seenAt);
     setText(c.seen, seenAt == null ? '–' : relShort(seenAt));
-    setAttr(c.seen, 'title', seenAt == null ? 'No status line yet' : 'Last status line ' + relAgo(seenAt) + ' (' + hhmm(seenAt) + ')');
+    setAttr(c.seen, 'data-age', age);
+    setAttr(c.seen, 'title', seenAt == null ? 'No status line yet' : 'Last heard ' + relAgo(seenAt) + ' (' + hhmm(seenAt) + ')');
     setAttr(c.btn, 'data-s', s);
     setAttr(c.btn, 'aria-label', (bot.name || id) + ', ' + statusLabel(s) + ', ' + seenText(bot));
     setAttr(c.btn, 'title', (bot.name || id) + ': ' + statusLabel(s) + (bot.step ? '. ' + bot.step : '') + ' · ' + seenText(bot));
@@ -1380,6 +1456,13 @@ function renderTeam(state, floor, o) {
 
 /* ---- bot card */
 
+function setPlainStat(slot, value, label) {
+  if (slot.v._raf) { cancelAnimationFrame(slot.v._raf); slot.v._raf = 0; }
+  slot.v._to = null;
+  setText(slot.v, value);
+  setText(slot.l, label);
+}
+
 function histRow(ev) {
   return h('li', { class: 'bhq-step-row' },
     h('time', { class: 'bhq-num', text: hhmm(parseTs(ev.t)) }),
@@ -1388,7 +1471,7 @@ function histRow(ev) {
 
 function renderCard(state, bot) {
   const c = U.panel.card;
-  const s = effStatus(bot);
+  const s = shownStatus(bot);
   const now = nowMs();
   const animate = !c.fresh;
 
@@ -1402,7 +1485,8 @@ function renderCard(state, bot) {
   setText(c.where, where + desk + ' · ' + seenText(bot));
 
   setAttr(c.stDot, 'data-s', s);
-  const since = parseTs(bot.since);
+  const lineT = parseTs(bot.history && bot.history[0] && bot.history[0].t) ?? parseTs(bot.last_event);
+  const since = (s === 'waiting_user' || s === 'error' || s === 'stuck') ? (parseTs(bot.since) ?? lineT) : parseTs(bot.since);
   const age = since == null ? '' : ' · ' + (now - since < 60000 ? 'just now' : fmtDur(now - since));
   setText(c.stTxt, (CHIP[s] || statusLabel(s)) + age);
 
@@ -1415,30 +1499,59 @@ function renderCard(state, bot) {
   setHidden(c.taskBlock, !showTask);
   setText(c.task, showTask ? task : '');
 
-  // today
+  // today — a zero tasks / hours pair with no events is "not tracked yet", not a row of zeros
   const td = bot.today || {};
-  const ev = Number(td.events) || 0, tk = Number(td.tasks_done) || 0;
-  setNum(c.sSteps.v, ev, animate);
-  setText(c.sSteps.l, plural(ev, 'step', 'steps'));
-  setNum(c.sTasks.v, tk, animate);
-  setText(c.sTasks.l, plural(tk, 'task', 'tasks'));
-  setText(c.sHours.v, fmtHours(td.working_min));
-
-  // usage share (hidden when there is no figure)
-  const period = state.usage && state.usage.period;
-  setText(c.usageLabel, USAGE_SPENT[period] || 'Usage');
-  const share = Number.isFinite(bot.usage_share) ? clamp(bot.usage_share, 0, 1) : null;
-  setHidden(c.useBlock, share == null);
-  if (share != null) {
-    setVar(c.fuel, '--p', (share > 0 ? Math.max(share, 0.02) : 0).toFixed(3));
-    setAttr(c.fuel, 'aria-valuenow', Math.round(share * 100));
-    setText(c.shareNum, Math.round(share * 100) + '%');
+  const ev = Number(td.events) || 0, tk = Number(td.tasks_done) || 0, mins = Number(td.working_min) || 0;
+  const noData = ev === 0 && tk === 0 && mins === 0;
+  setHidden(c.stats, noData);
+  setHidden(c.untracked, !noData);
+  if (!noData) {
+    setNum(c.sSteps.v, ev, animate);
+    setText(c.sSteps.l, plural(ev, 'step', 'steps'));
+    if (tk === 0 && mins === 0) {
+      setPlainStat(c.sTasks, '–', 'not tracked yet');
+      setPlainStat(c.sHours, '–', 'not tracked yet');
+    } else {
+      setNum(c.sTasks.v, tk, animate);
+      setText(c.sTasks.l, plural(tk, 'task', 'tasks'));
+      setText(c.sHours.v, fmtHours(mins));
+      setText(c.sHours.l, 'h worked');
+    }
   }
 
-  // last steps (rebuilt only when they change); the newest entry is usually the current step, already shown above
-  let hist = (bot.history || []).slice(0, STEPS_SHOWN + 1);
-  if (hist.length > 1 && hist[0].step === bot.step) hist = hist.slice(1);
-  hist = hist.slice(0, STEPS_SHOWN);
+  // Usage: the bot's own percent of the limit. "100% of all" is hidden when only one bot
+  // reports (that figure is just "everyone who reported"), and shown only as a real split.
+  const period = (state.usage && state.usage.period) || 'week';
+  setText(c.usageLabel, USAGE_SPENT[period] || 'Usage');
+  const usagePct = (b) => {
+    const v = b && b.usage_pct;
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? clamp(n, 0, 100) : null;
+  };
+  const pct = usagePct(bot);
+  let reporters = 0;
+  const allBots = state.bots || {};
+  for (const id of Object.keys(allBots)) if (usagePct(allBots[id]) != null) reporters++;
+  const share = Number.isFinite(bot.usage_share) ? clamp(bot.usage_share, 0, 1) : null;
+  const showShare = share != null && reporters >= 2;
+  setHidden(c.useBlock, pct == null && !showShare);
+  if (pct != null) {
+    setVar(c.fuel, '--p', (pct > 0 ? Math.max(pct / 100, 0.02) : 0).toFixed(3));
+    setAttr(c.fuel, 'aria-valuenow', Math.round(pct));
+    setAttr(c.fuel, 'aria-label', 'Share of the ' + period + ' limit');
+    setText(c.shareNum, Math.round(pct) + '%');
+    setText(c.shareRest, ' of the ' + period);
+  } else if (showShare) {
+    setVar(c.fuel, '--p', (share > 0 ? Math.max(share, 0.02) : 0).toFixed(3));
+    setAttr(c.fuel, 'aria-valuenow', Math.round(share * 100));
+    setAttr(c.fuel, 'aria-label', 'Share of reported usage');
+    setText(c.shareNum, Math.round(share * 100) + '%');
+    setText(c.shareRest, ' of reported');
+  }
+
+  // last steps, newest first — the current line is included, not dropped
+  let hist = (bot.history || []).slice(0, STEPS_SHOWN);
   const sig = bot.id + '\n' + hist.map((x) => x.t + '|' + x.status + '|' + x.step).join('\n');
   if (sig !== c.histSig) {
     c.histSig = sig;
@@ -1460,10 +1573,28 @@ function makeRow(ev, state) {
   const bot = state.bots && state.bots[ev.bot];
   const name = ev.name || (bot && bot.name) || ev.bot || '';
   const s = ev.status || 'idle';
-  return h('li', { class: 'bhq-frow', 'data-s': s },
-    h('time', { class: 'bhq-num', text: hhmm(parseTs(ev.t)), datetime: ev.t || '' }),
+  const time = h('time', { class: 'bhq-num', datetime: ev.t || '' });
+  const step = h('span', { class: 'bhq-fstep', text: ev.step || statusLabel(ev.status) });
+  const who = h('b', { class: 'bhq-fname', text: name });
+  const row = h('li', { class: 'bhq-frow', 'data-s': s },
+    time,
     h('i', { class: 'bhq-dot', 'data-s': s, 'aria-hidden': 'true' }),
-    h('span', { class: 'bhq-ftxt' }, h('b', { text: name }), ' ' + (ev.step || statusLabel(ev.status))));
+    h('span', { class: 'bhq-ftxt' }, who, step));
+  row._time = time;
+  row._who = who;
+  row._step = step;
+  row._bot = ev.bot || '';
+  return row;
+}
+
+function paintFeedRow(row, ev, cont) {
+  const t = parseTs(ev.t);
+  const rel = t == null ? '' : fmtWait(nowMs() - t);
+  setText(row._time, rel);
+  setAttr(row._time, 'title', t == null ? null : hhmm(t));
+  setAttr(row._time, 'datetime', ev.t || null);
+  setCls(row, 'is-cont', cont);
+  setAttr(row._who, 'hidden', cont ? '' : null);
 }
 
 function retireRow(row) {
@@ -1510,6 +1641,8 @@ function renderFeed(state) {
       }
       U.feedRows.set(keys[i], row);
     }
+    const prev = i > 0 ? items[i - 1] : null;
+    paintFeedRow(row, ev, !!(prev && prev.bot && prev.bot === ev.bot));
     return row;
   });
   reconcile(fd.list, els.concat([...U.feedOut]), 0);
@@ -1611,15 +1744,34 @@ function renderWaiting(state) {
   const d = U.dock;
   const bots = state.bots || {};
   const ids = Object.keys(bots)
-    .filter((id) => { const s = effStatus(bots[id]); return s === 'waiting_user' || s === 'error'; })
-    .sort((a, b) => (parseTs(bots[b].last_event) || 0) - (parseTs(bots[a].last_event) || 0)
+    .filter((id) => needsAttention(bots[id]))
+    .sort((a, b) => (parseTs(bots[b].since) || parseTs(bots[b].last_event) || 0) - (parseTs(bots[a].since) || parseTs(bots[a].last_event) || 0)
       || String(bots[a].name).localeCompare(String(bots[b].name)));
 
-  const errors = ids.filter((id) => effStatus(bots[id]) === 'error').length;
+  const clear = ids.length === 0;
+  setCls(d.waiting.root, 'is-clear', clear);
+  setText(d.waiting.titleEl, clear ? 'All clear' : 'Waiting on me');
+  setAttr(d.waiting.root, 'aria-label', clear ? 'All clear' : 'Waiting on me');
+  setHidden(d.waiting.count, clear);
+  if (d.waiting.eye) setHidden(d.waiting.eye, clear);
+  if (clear) {
+    d.waiting.hadRows = false;
+    paintDockCard(d.waiting, false);
+    d.waiting.rows = 0;
+    setCls(d.waiting.root, 'has-rows', false);
+    setAttr(d.waiting.count, 'data-s', null);
+    setHidden(d.wempty, true);
+    return;
+  }
+  if (d.waiting.primed && !d.waiting.hadRows) setDockOpen(d.waiting, true, false);
+  d.waiting.primed = true;
+  d.waiting.hadRows = true;
+
+  const errors = ids.filter((id) => shownStatus(bots[id]) === 'error').length;
   setText(d.waiting.count, ids.length);
   d.waiting.rows = ids.length;
-  setCls(d.waiting.root, 'has-rows', ids.length > 0);
-  setAttr(d.waiting.count, 'data-s', errors ? 'error' : ids.length ? 'waiting_user' : null);
+  setCls(d.waiting.root, 'has-rows', true);
+  setAttr(d.waiting.count, 'data-s', errors ? 'error' : 'waiting_user');
 
   const seen = new Set(ids);
   for (const [id, r] of d.wrows) {
@@ -1629,11 +1781,13 @@ function renderWaiting(state) {
     let r = d.wrows.get(id);
     if (!r) { r = makeWaitRow(id); d.wrows.set(id, r); }
     const bot = bots[id];
-    const s = effStatus(bot);
+    const s = shownStatus(bot);
     setAttr(r.row, 'data-s', s);
     setAvatar(r.av, bot, s);
     setText(r.name, bot.name || id);
-    setText(r.st, CHIP[s] || statusLabel(s));
+    const since = parseTs(bot.since) ?? parseTs(bot.last_event);
+    const wait = since == null ? '' : ' · ' + fmtWait(nowMs() - since);
+    setText(r.st, (CHIP[s] || statusLabel(s)) + wait);
     setText(r.step, bot.step ? ' · ' + bot.step : '');
     setHidden(r.btn, !bot.chat_url);
     return r.row;
@@ -1682,42 +1836,37 @@ function renderFinished(state) {
   for (const r of d.finRefs) setText(r.time, r.t == null ? '' : relAgo(r.t));
 }
 
-/* Routines: sorted by next run; "Turn off" copies `pause routine <name>` and opens the owner's chat. */
+/* Routines: read-only. This page is public, so it does not offer "Turn off"
+   (that copied `pause routine <name>` and opened the chat). A Chat link is shown
+   only when that bot already has a chat link. */
 
-async function copyText(text) {
-  try {
-    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
-  } catch { /* fall through to the old way */ }
-  try {
-    const ta = h('textarea', { 'aria-hidden': 'true', tabindex: '-1', readonly: true });
-    ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none';
-    document.body.append(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return !!ok;
-  } catch { return false; }
-}
-
-async function turnOffRoutine(r, ref) {
-  const d = U.dock;
-  const cmd = 'pause routine ' + r.routine;
-  const ok = await copyText(cmd);
-  setText(ref.noteText, ok ? 'Copied — paste it in the chat' : 'Could not copy — send: ' + cmd);
-  const key = ref.key;
-  clearTimeout(d.copied.get(key));
-  ref.li.classList.add('is-copied');
-  d.copied.set(key, setTimeout(() => { d.copied.delete(key); ref.li.classList.remove('is-copied'); }, 4200));
-  const bot = U.last.state && U.last.state.bots && U.last.state.bots[r.bot];
-  if (bot && bot.chat_url) openChat(bot.id, bot.chat_url);
+function routineSkeleton() {
+  const box = h('div', { class: 'bhq-skel-list', 'aria-hidden': 'true' });
+  for (let i = 0; i < 3; i++) box.append(h('i', { class: 'bhq-skel', style: 'width:' + (78 - i * 14) + '%' }));
+  return box;
 }
 
 function renderRoutines(state) {
   const d = U.dock;
   const has = Array.isArray(state.routines);
-  setHidden(d.routines.root, !has);
-  if (!has) return;
+  const pending = state.routinesPending === true && (!has || state.routines.length === 0);
+  if (!pending && !has) { setHidden(d.routines.root, true); return; }
+  if (!d.skel) {
+    d.skel = routineSkeleton();
+    d.routines.inner.append(d.skel);
+  }
+  setHidden(d.routines.root, false);
+  setHidden(d.skel, !pending);
+  setHidden(d.rl, pending);
+  if (pending) {
+    setHidden(d.rempty, true);
+    setText(d.routines.count, '');
+    setAttr(d.routines.root, 'aria-busy', 'true');
+    d.routines.rows = 3;
+    setCls(d.routines.root, 'has-rows', true);
+    return;
+  }
+  setAttr(d.routines.root, 'aria-busy', null);
 
   const items = state.routines.filter((r) => r && r.routine).slice()
     .sort((a, b) => (parseTs(a.next_run) ?? Infinity) - (parseTs(b.next_run) ?? Infinity));
@@ -1733,23 +1882,21 @@ function renderRoutines(state) {
     d.routRefs = items.map((r) => {
       const bot = botFor(state, r.bot, r.name);
       const owner = r.name || bot.name || r.bot || '';
-      const key = r.bot + '|' + r.routine;
       const av = makeAva({ orb: false });
       setAvatar(av, bot, null);
       const next = h('span', { class: 'bhq-rnext bhq-num' });
-      const noteText = h('span');
-      const btn = h('button', { class: 'bhq-roff', type: 'button', text: 'Turn off', title: 'Copies "pause routine ' + r.routine + '" and opens the chat' });
-      const li = h('li', { class: 'bhq-rrow' + (d.copied.has(key) ? ' is-copied' : '') },
+      const chat = bot.chat_url
+        ? h('button', { class: 'bhq-rchat', type: 'button', text: 'Chat', title: 'Open ' + owner + '’s chat' })
+        : null;
+      if (chat) chat.addEventListener('click', () => openChat(bot.id, bot.chat_url));
+      const li = h('li', { class: 'bhq-rrow' },
         av.root,
         h('div', { class: 'bhq-rmain' },
           h('div', { class: 'bhq-rtop' }, h('b', { class: 'bhq-rname', text: r.routine, title: r.routine }), next),
           h('div', { class: 'bhq-rbot' },
             h('span', { class: 'bhq-rmeta', text: owner + (r.schedule ? ' · ' + r.schedule : ''), title: owner + (r.schedule ? ' · ' + r.schedule : '') }),
-            h('span', { class: 'bhq-rnote', role: 'status' }, svg(ICON.check), noteText),
-            btn)));
-      const ref = { li, next, noteText, key, t: parseTs(r.next_run) };
-      setText(noteText, 'Copied — paste it in the chat');
-      btn.addEventListener('click', () => turnOffRoutine(r, ref));
+            chat)));
+      const ref = { next, t: parseTs(r.next_run) };
       d.rl.append(li);
       return ref;
     });
@@ -1757,5 +1904,68 @@ function renderRoutines(state) {
   for (const ref of d.routRefs) {
     setText(ref.next, ref.t == null ? 'no date' : relIn(ref.t));
     setAttr(ref.next, 'title', ref.t == null ? null : fullLocal(ref.t));
+  }
+}
+
+/* Needs-you banner: one button per bot that is waiting, stuck or in error. */
+
+function buildNeed() {
+  const root = own(h('div', { class: 'bhq-need', hidden: true, role: 'region', 'aria-label': 'Needs you' }));
+  document.body.append(root);
+  U.need = { root, sig: '', refs: [] };
+}
+
+function renderNeed(state) {
+  const n = U.need;
+  if (!n) return;
+  const bots = state.bots || {};
+  const ids = Object.keys(bots)
+    .filter((id) => needsAttention(bots[id]))
+    .sort((a, b) => {
+      const rank = (id) => shownStatus(bots[id]) === 'error' ? 0 : 1;
+      return rank(a) - rank(b)
+        || (parseTs(bots[b].since) || 0) - (parseTs(bots[a].since) || 0)
+        || String(bots[a].name).localeCompare(String(bots[b].name));
+    });
+  setHidden(n.root, ids.length === 0);
+  if (!ids.length) { n.sig = ''; return; }
+  const anyErr = ids.some((id) => shownStatus(bots[id]) === 'error');
+  setAttr(n.root, 'data-s', anyErr ? 'error' : 'waiting_user');
+
+  const shown = ids.slice(0, 3);
+  const more = ids.length - shown.length;
+  const sig = shown.join('|') + '#' + more;
+  if (sig !== n.sig) {
+    n.sig = sig;
+    n.root.replaceChildren();
+    n.refs = shown.map((id) => {
+      const dot = h('i', { class: 'bhq-dot', 'aria-hidden': 'true' });
+      const label = h('span', { class: 'bhq-need-txt' });
+      const btn = h('button', { type: 'button', class: 'bhq-need-btn' }, dot, label);
+      btn.addEventListener('click', () => { if (U.h.onSelectBot) U.h.onSelectBot(id); });
+      n.root.append(btn);
+      return { id, dot, label, btn };
+    });
+    if (more > 0) {
+      const moreBtn = h('button', { type: 'button', class: 'bhq-need-more', text: '+' + more + ' more' });
+      moreBtn.addEventListener('click', () => {
+        if (U.dock) setDockOpen(U.dock.waiting, true, false);
+        if (U.phone && U.sh) sheetGo(true);
+      });
+      n.root.append(moreBtn);
+    }
+  }
+  for (const r of n.refs) {
+    const bot = bots[r.id];
+    if (!bot) continue;
+    const s = shownStatus(bot);
+    const since = parseTs(bot.since) ?? parseTs(bot.last_event);
+    const wait = since == null ? '' : fmtWait(nowMs() - since);
+    const name = bot.name || r.id;
+    const kind = s === 'error' ? 'error' : s === 'stuck' ? 'stuck' : 'waiting';
+    setAttr(r.dot, 'data-s', s);
+    setAttr(r.btn, 'data-s', s);
+    setText(r.label, wait && wait !== 'just now' ? name + ' · ' + kind + ' ' + wait : name + ' · ' + kind);
+    setAttr(r.btn, 'aria-label', (name) + ', ' + (CHIP[s] || kind) + (wait ? ', for ' + wait : '') + '. Open this bot');
   }
 }

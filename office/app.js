@@ -69,10 +69,9 @@ function setFloor(id, keepSelection = false) {
 
 function pickDefaultFloor() {
   const fullest = () => [...state.floors].sort((a, b) => b.bots.length - a.bots.length)[0]?.id ?? null;
-  if (WALLPAPER) {
-    const pinned = params.get('floor');
-    return pinned && state.floors.some((f) => f.id === pinned) ? pinned : fullest();
-  }
+  const pinned = params.get('floor');
+  if (pinned && state.floors.some((f) => f.id === pinned)) return pinned;
+  if (WALLPAPER) return fullest();
   let saved = null;
   try { saved = localStorage.getItem('bothq.floor'); } catch {}
   if (saved && state.floors.some((f) => f.id === saved)) return saved;
@@ -146,10 +145,25 @@ if (feedFromLink(location)) {                              // #<topic>, #<topic>
 // ---------- static preview: local simulation ----------
 
 async function startLocalDemo() {
-  const res = await fetch('./data/demo-state.json', { cache: 'no-store' });
+  // ?fixture=1 is a frozen local office (waiting / error / working / idle). It never touches ntfy.
+  const file = params.get('fixture') ? './data/fixture-state.json' : './data/demo-state.json';
+  const res = await fetch(file, { cache: 'no-store' });
   state = await res.json();
   state.demoLocal = true;
+  // Screenshot switch: ?clear=1 drops waits and errors so the quiet "All clear" line can be checked.
+  if (params.get('clear') === '1') {
+    for (const b of Object.values(state.bots)) {
+      const hot = b.status === 'waiting_user' || b.status === 'error' || b.status === 'stuck'
+        || b.effective_status === 'waiting_user' || b.effective_status === 'error' || b.effective_status === 'stuck';
+      if (!hot) continue;
+      b.status = 'idle';
+      b.effective_status = 'idle';
+      if (b.history && b.history[0]) b.history[0].status = 'idle';
+    }
+  }
+  if (params.get('routines') === 'pending') { state.routinesPending = true; state.routines = []; }
   render();
+  if (params.get('fixture')) return;
   demoTimer = setInterval(simulate, 1600);
 }
 

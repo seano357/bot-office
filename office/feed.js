@@ -53,14 +53,20 @@ export async function connectFeed({ topic, servers }, onState) {
 
   lines = cached(cacheKey).map((l) => ({ ...l, src: l.src || sources[0].tag }));
   if (usual) lines.push(...cached(oldKey).map((l) => ({ ...l, src: l.src || 'ntfy' })));
+  let historyDone = false;
+  lines = lines.filter(fresh).sort((a, b) => a.time - b.time);   // stable: lines of one second keep the mailbox's order
+  if (lines.length) { for (const l of lines) ingest(l, true); publish(); }   // cached office now; routines skeleton until the channel answers
   await Promise.all(sources.map(async (s) => {
     try {
       const text = await (await fetch(`${s.base}/json?poll=1&since=12h`, { cache: 'no-store' })).text();
       for (const row of text.split('\n')) if (row) keep(s, JSON.parse(row));
     } catch { /* offline or down: the other mailbox and the cache still show the office */ }
   }));
-  lines = lines.filter(fresh).sort((a, b) => a.time - b.time);   // stable: lines of one second keep the mailbox's order
-  for (const l of lines) ingest(l, true);
+  historyDone = true;
+  const more = lines.filter(fresh).sort((a, b) => a.time - b.time);
+  for (const l of more) ingest(l, true);
+  lines = lines.filter((l, i, arr) => arr.findIndex((x) => x.src === l.src && x.id === l.id) === i)
+    .sort((a, b) => a.time - b.time);
   for (const s of sources) s.lastId = lines.findLast((l) => l.src === s.tag)?.id ?? null;
   save();
   if (usual) try { localStorage.removeItem(oldKey); } catch { /* private mode */ }
@@ -173,6 +179,7 @@ export async function connectFeed({ topic, servers }, onState) {
     s.finished = finished;
     s.routines = [...routines].flatMap(([bot, { name, items }]) => items.map((r) => ({ bot, name, ...r })))
       .sort((a, b) => (a.next_run ? Date.parse(a.next_run) : Infinity) - (b.next_run ? Date.parse(b.next_run) : Infinity));
+    s.routinesPending = !historyDone;
     s.check = check && Date.now() - check.ms < CHECK_MS ? {
       t: new Date(check.ms).toISOString(),
       bots: check.names.map((name) => {                  // answered = a status line of its own at or after the check

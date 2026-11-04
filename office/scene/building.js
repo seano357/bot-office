@@ -11,9 +11,9 @@ import { WallDisplays } from './walls.js';
 import { floorStyles, applyFloorStyle, styleObjects, styleNightMaps } from './floorstyle.js';
 
 const LIFT = 20;                        // how far upper floors slide up, out of the frame (m)
-const SWAP_AT = 0.14;                   // s after a switch starts: blur peak, open/closed swap
-const BLUR_TAIL = 0.4;                  // s for the blur to clear after the swap
-const BLUR_PX = 7;
+const SWAP_AT = 0.08;                   // s after a switch starts: blur peak, open/closed swap
+const BLUR_TAIL = 0.14;                 // s for the blur to clear after the swap (kept short; a long smear hid the floor)
+const BLUR_PX = 2;
 const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CAB_H = 2.2;
 const NIGHT_TINT = [0.2, 0.26, 0.42];   // used when a baked mesh has no night lightmap

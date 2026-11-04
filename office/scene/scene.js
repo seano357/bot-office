@@ -21,7 +21,7 @@ const ISO_DIR = new THREE.Vector3(1, 1, 1).normalize();
 const HOME = { x: -0.4, y: -0.3, z: 0.3 };             // camera target relative to the active floor's surface
 const VIEW_SPAN = { w: 35, h: 22 };                 // meters visible at zoom 1 (the stack + the white air around it)
 const PHONE_SPAN_W = 29.5;                          // m across a phone's scene box: the floor + shaft fill ~90 % of the screen
-const ZOOM = { min: 0.75, max: 3, focus: 2 };
+const ZOOM = { min: 0.75, max: 4.2, focus: 2.4 };
 const UI_LEFT = 230, UI_RIGHT = 360;                   // glass panels the building must not hide behind
 const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = ground foreshortening
 // Server desk numbers fill 1..20 in arrival order; seat them on the far side of the tables first (odd desks face
@@ -168,7 +168,7 @@ function sync() {
   for (const [id, actor] of actors) if (!ids.has(id)) { actor.retire(); retiring.add(actor); actors.delete(id); }
 
   const maxShare = Math.max(0.0001, ...floorBots.map((b) => b.usage_share || 0));
-  const lounge = assignLounge(floorBots);
+  const lounge = assignLounge(floorBots.map(presentBot));
   const flags = new Array(20).fill(0);
   const delay = Math.max(0, switchedAt + 0.55 - nowSec);
   for (const bot of floorBots) {
@@ -178,14 +178,15 @@ function sync() {
       actors.set(bot.id, actor);
       attachModel(actor, bot);
     }
-    const deskIdx = (DESK_ORDER[(bot.desk || 1) - 1] || 1) - 1;
+    const posed = presentBot(bot);
+    const deskIdx = (DESK_ORDER[(posed.desk || 1) - 1] || 1) - 1;
     const desk = assets.spots.desks[deskIdx] || assets.spots.desks[0];
-    if ((bot.effective_status || bot.status) === 'working' && !lounge.has(bot.id)) flags[deskIdx] = 1;
-    actor.update(bot, lounge.get(bot.id) || desk, { maxShare, selectedBot: view.selectedBot });
+    if ((posed.effective_status || posed.status) === 'working' && !lounge.has(posed.id)) flags[deskIdx] = 1;
+    actor.update(posed, lounge.get(posed.id) || desk, { maxShare, selectedBot: view.selectedBot, now: parseTs(state.now) });
   }
   building.setScreens(flags);
   const floor = floors.find((f) => f.id === building.activeId);
-  building.setDisplayData({ floorName: floor ? floor.name : '', bots: floorBots, hour: sofiaHour(state.now) });
+  building.setDisplayData({ floorName: floor ? floor.name : '', bots: floorBots.map(presentBot), hour: sofiaHour(state.now) });
   if (hoveredId && !actors.has(hoveredId)) hoveredId = null;
   if (!settledOnce) {
     settledOnce = true;
@@ -214,6 +215,52 @@ function settle(seconds = 3) {
     for (const a of actors.values()) { a.hostAlpha = building.activeOpen()?.alpha ?? 1; a.tick(step, nowSec); }
     for (const a of retiring) { a.tick(step, nowSec); if (a.dead) retiring.delete(a); }
   }
+}
+
+function parseTs(s) {
+  const t = typeof s === 'number' ? s : Date.parse(s);
+  return Number.isFinite(t) ? t : Date.now();
+}
+
+// The latest line wins when it is still a wait, an error or stuck — a decayed `effective_status`
+// of idle must not park that bot in the lounge or drop the status ring.
+function presentStatus(bot) {
+  const line = (bot.history && bot.history[0] && bot.history[0].status) || bot.status;
+  if (line === 'waiting_user' || line === 'error' || line === 'stuck') return line;
+  return bot.effective_status || bot.status || 'idle';
+}
+function presentBot(bot) {
+  const s = presentStatus(bot);
+  if ((bot.effective_status || bot.status) === s) return bot;
+  return { ...bot, effective_status: s };
+}
+
+// Frame the desks and lounge seats that are actually in use, instead of the whole empty floor.
+function occupiedTarget(floorId) {
+  const home = { x: HOME.x, z: HOME.z, zoom: 1 };
+  if (!assets || !lastState) return home;
+  const bots = Object.values(lastState.bots || {}).filter((b) => b.floor === floorId).map(presentBot);
+  if (!bots.length) return home;
+  const lounge = assignLounge(bots);
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, sx = 0, sz = 0, n = 0;
+  for (const b of bots) {
+    const deskIdx = (DESK_ORDER[(b.desk || 1) - 1] || 1) - 1;
+    const spot = lounge.get(b.id) || assets.spots.desks[deskIdx] || assets.spots.desks[0];
+    if (!spot) continue;
+    minX = Math.min(minX, spot.pos.x); maxX = Math.max(maxX, spot.pos.x);
+    minZ = Math.min(minZ, spot.pos.z); maxZ = Math.max(maxZ, spot.pos.z);
+    sx += spot.pos.x; sz += spot.pos.z; n++;
+  }
+  if (!n) return home;
+  const span = Math.max(maxX - minX, (maxZ - minZ) / SIN_E, 3.2);
+  const pad = 4.2;
+  // Close enough that empty desks are not the subject; ZOOM.max still caps a pan-in.
+  const zoom = clamp(VIEW_SPAN.w / (span + pad), 1.55, 2.85);
+  return {
+    x: clamp(HOME.x * 0.1 + (sx / n) * 0.9, -6.5, 6.5),
+    z: clamp(HOME.z * 0.1 + (sz / n) * 0.9, -5, 5),
+    zoom,
+  };
 }
 
 // Idle bots go to the lounge while seats last; the rest nap at their desks.
@@ -263,11 +310,12 @@ function switchFloor(id, first) {
   hoveredId = null;
   building.setActive(id, { intro: first });
   const y = building.activeY + HOME.y;
-  cam.x.to(HOME.x); cam.z.to(HOME.z); cam.y.to(y); cam.zoom.to(0);
+  const spot = occupiedTarget(id);
+  cam.x.to(spot.x); cam.z.to(spot.z); cam.y.to(y); cam.zoom.to(Math.log(spot.zoom));
   if (first) {
-    cam.x.snap(HOME.x); cam.z.snap(HOME.z);
-    cam.y.snap(y - 2.6); cam.zoom.snap(Math.log(0.86));
-    cam.y.to(y, 0.1); cam.zoom.to(0, 0.1);
+    cam.x.snap(spot.x); cam.z.snap(spot.z);
+    cam.y.snap(y - 2.6); cam.zoom.snap(Math.log(spot.zoom * 0.86));
+    cam.y.to(y, 0.1); cam.zoom.to(Math.log(spot.zoom), 0.1);
   }
   switchedAt = nowSec;
   if (first) { building.prewarm(camera); hideLoader(); }
@@ -286,7 +334,8 @@ function hideLoader() {
 export function zoom(dir) {
   if (!building) return;
   if (dir === 'reset') {
-    cam.x.to(HOME.x); cam.z.to(HOME.z); cam.y.to(building.activeY + HOME.y); cam.zoom.to(0);
+    const spot = occupiedTarget(building.activeId);
+    cam.x.to(spot.x); cam.z.to(spot.z); cam.y.to(building.activeY + HOME.y); cam.zoom.to(Math.log(spot.zoom));
     return;
   }
   const z = clamp(Math.exp(cam.zoom.target) * (dir === 'in' ? 1.3 : 1 / 1.3), ZOOM.min, ZOOM.max);
