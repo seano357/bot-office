@@ -160,9 +160,8 @@ body {
 }
 #feed {
   position: fixed; z-index: 20; left: var(--gutter); bottom: var(--gutter);
-  width: auto;
-  right: calc(var(--panel-w) + var(--gutter) + 148px);
-  max-height: min(300px, 38vh);
+  width: min(392px, calc(100vw - 2 * var(--gutter)));
+  max-height: none;
 }
 
 @media (max-width: 1100px) {
