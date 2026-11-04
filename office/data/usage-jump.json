@@ -1,0 +1,39 @@
+{
+ "now": "2026-11-03T22:10:00.000Z",
+ "usage": {
+  "period": "week",
+  "total_used_pct": 27.5,
+  "resets_at": "2026-11-10T01:33:00.000Z",
+  "updated_at": "2026-11-03T22:03:43.000Z"
+ },
+ "readings": [
+  {
+   "t": 1793711006000,
+   "total": 11.1,
+   "resets": 1794274380000,
+   "bots": {
+    "Ruby": 97,
+    "Stock Trade Automater": 3
+   }
+  },
+  {
+   "t": 1793728928000,
+   "total": 15.5,
+   "resets": 1794274380000,
+   "bots": {
+    "Ruby": 97,
+    "Stock Trade Automater": 3
+   }
+  },
+  {
+   "t": 1793743423000,
+   "total": 27.5,
+   "resets": 1794274380000,
+   "bots": {
+    "Ruby": 95,
+    "Stock Trade Automater": 3,
+    "Roughwire Marketing": 2
+   }
+  }
+ ]
+}
