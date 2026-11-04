@@ -3,7 +3,7 @@
  *   top-left   brand + live clock         top-center  status counters + needs-you banner
  *   left       floors "elevator"          right       floor team, usage burn-rate card, routines
  *   left, under the floors   dock: Status check (while one runs) / Waiting on me / Finished
- *   bottom     activity feed (wider, last 6)    zoom - / + sits at the right of the feed
+ *   bottom-left  activity feed (3 compact rows; expands in place)    zoom - / + sits clear of it
  *
  *   The usage card mounts into #bhq-usage-slot (right rail, under the floor team, above Routines).
  *   On a phone the rail, banner and team move into the half-height sheet together.
@@ -35,7 +35,9 @@ import { analyzeUsage } from '../lib/usage.js';
 const THUMB_BASE = new URL('../../assets/blobs/thumbs/', import.meta.url).href;
 // the product logo, exactly as is (a 400x400 square), shown small in the brand pill
 const MARK_SRC = new URL('../../assets/brand/logo-mark.png', import.meta.url).href;
-const FEED_ROWS = 7;
+const FEED_COMPACT = 3;
+const FEED_OPEN = 16;
+const LS_FEED = 'bothq.feed';
 const STEPS_SHOWN = 4;
 const FEED_OUT_MS = 420;
 const FINISHED_MAX = 60;
@@ -694,8 +696,26 @@ function buildFeed(root) {
   root.classList.add('bhq-surface', 'bhq-glow', 'bhq-glow--still');
   const list = h('ol', { class: 'bhq-frows', role: 'list', 'aria-live': 'off' });
   const empty = h('p', { class: 'bhq-note', text: 'No events yet.', hidden: true });
-  root.append(h('div', { class: 'bhq-fhead' }, h('span', { text: 'Activity' })), list, empty);
-  U.feed = { root, list, empty };
+  const toggle = h('button', { class: 'bhq-fmore', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Show more activity', title: 'Show more' }, svg(ICON.chev));
+  root.append(h('div', { class: 'bhq-fhead' }, h('span', { text: 'Activity' }), toggle), list, empty);
+  U.feed = { root, list, empty, toggle, open: lsGet(LS_FEED) === '1' };
+  paintFeedOpen();
+  toggle.addEventListener('click', () => {
+    U.feed.open = !U.feed.open;
+    lsSet(LS_FEED, U.feed.open ? '1' : '0');
+    paintFeedOpen();
+    if (U.last && U.last.state) renderFeed(U.last.state);
+    layoutDock();
+  });
+}
+
+function paintFeedOpen() {
+  const fd = U.feed;
+  if (!fd) return;
+  setCls(fd.root, 'is-open', fd.open);
+  setAttr(fd.toggle, 'aria-expanded', fd.open ? 'true' : 'false');
+  setAttr(fd.toggle, 'aria-label', fd.open ? 'Show less activity' : 'Show more activity');
+  setAttr(fd.toggle, 'title', fd.open ? 'Show less' : 'Show more');
 }
 
 function buildZoom() {
@@ -1623,7 +1643,10 @@ function retireRow(row) {
 
 function renderFeed(state) {
   const fd = U.feed;
-  const items = (Array.isArray(state.feed) ? state.feed : []).slice(0, FEED_ROWS);
+  const all = Array.isArray(state.feed) ? state.feed : [];
+  const limit = fd.open ? FEED_OPEN : FEED_COMPACT;
+  const items = all.slice(0, limit);
+  setHidden(fd.toggle, all.length <= FEED_COMPACT);
 
   // Stable keys; identical events are told apart by counting from the oldest end.
   const seenBase = new Map();
@@ -1644,7 +1667,7 @@ function renderFeed(state) {
   let added = 0;
   for (const k of keys) if (!U.feedRows.has(k)) added++;
   // The first paint and a wholesale replacement do not animate; a trickle of new events slides in.
-  const animate = !U.feedFirst && added > 0 && added < FEED_ROWS && !reducedMotion.matches;
+  const animate = !U.feedFirst && added > 0 && added < limit && !reducedMotion.matches;
 
   const els = items.map((ev, i) => {
     let row = U.feedRows.get(keys[i]);

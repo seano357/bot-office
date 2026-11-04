@@ -379,21 +379,32 @@
 
 /* ====================================================================== live feed */
 
-#feed { padding: 14px 16px 12px; border-radius: 22px; display: flex; flex-direction: column; overflow: hidden; }
-#feed .bhq-fhead { padding: 0 0 8px; }
-.bhq-frows { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+#feed { padding: 12px 14px 10px; border-radius: 22px; display: flex; flex-direction: column; overflow: hidden; }
+#feed .bhq-fhead { padding: 0 0 6px; align-items: center; }
+.bhq-fmore {
+  flex: none; width: 28px; height: 28px; margin: -4px -4px -4px 8px; border-radius: 14px;
+  display: grid; place-items: center; color: var(--mid);
+}
+.bhq-fmore:hover { background: rgba(255, 255, 255, .08); color: var(--hi); }
+.bhq-fmore .bhq-chev { position: static; width: 16px; height: 16px; margin: 0; transition: transform .45s var(--bhq-spring); }
+#feed.is-open .bhq-fmore .bhq-chev { transform: rotate(180deg); }
+.bhq-frows { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#feed.is-open .bhq-frows { max-height: min(220px, 28vh); overflow-y: auto; }
 .bhq-frow {
-  display: flex; align-items: flex-start; gap: 9px; min-height: 22px; padding: 3px 0; overflow: hidden;
-  font: 800 12.5px/1.35 var(--bhq-round); color: var(--mid);
+  display: flex; align-items: center; gap: 8px; height: 24px; overflow: hidden;
+  font: 800 12.5px/1.3 var(--bhq-round); color: var(--mid); white-space: nowrap;
 }
-.bhq-frow time { flex: none; width: 34px; padding-top: 1px; color: #C8C8D0; }
-.bhq-frow .bhq-dot { width: 7px; height: 7px; margin-top: 5px; box-shadow: none; }
-.bhq-ftxt {
-  min-width: 0;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
-}
+.bhq-frow time { flex: none; width: 32px; color: #C8C8D0; }
+.bhq-frow .bhq-dot { width: 7px; height: 7px; margin-top: 0; box-shadow: none; }
+.bhq-ftxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bhq-fstep { overflow-wrap: anywhere; }
 .bhq-frow b { color: var(--hi); font-weight: 900; margin-right: 6px; }
+#feed.is-open .bhq-frow { align-items: flex-start; height: auto; min-height: 22px; padding: 2px 0; white-space: normal; }
+#feed.is-open .bhq-frow .bhq-dot { margin-top: 5px; }
+#feed.is-open .bhq-ftxt {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; text-overflow: unset;
+}
 .bhq-frow.is-cont { padding-top: 0; }
 .bhq-frow.is-new { animation: bhq-row-in .45s var(--bhq-spring) both; }
 .bhq-frow.is-out { animation: bhq-row-out .35s var(--bhq-ease) both; pointer-events: none; }
@@ -868,8 +879,9 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
 .bhq-phone .bhq-sheet .bhq-members { overflow: visible; }
 .bhq-phone .bhq-sheet .bhq-member { min-height: 56px; }
 .bhq-phone .bhq-sheet #feed {
-  position: static; width: auto; right: auto; max-height: none; display: block; padding: 14px 16px 12px; border-radius: 22px;
+  position: static; width: auto; right: auto; max-height: none; display: flex; padding: 14px 16px 12px; border-radius: 22px;
 }
+.bhq-phone .bhq-sheet #feed.is-open .bhq-frows { max-height: 200px; }
 /* small buttons keep their look but get a 44 px hit area */
 /* (the eye is already absolutely positioned, so it anchors its own hit area) */
 .bhq-phone .bhq-sheet :is(.bhq-wbtn, .bhq-roff) { position: relative; }
