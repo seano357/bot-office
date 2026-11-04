@@ -21,7 +21,7 @@ const ISO_DIR = new THREE.Vector3(1, 1, 1).normalize();
 const HOME = { x: -0.4, y: -0.3, z: 0.3 };             // camera target relative to the active floor's surface
 const VIEW_SPAN = { w: 35, h: 22 };                 // meters visible at zoom 1 (the stack + the white air around it)
 const PHONE_SPAN_W = 29.5;                          // m across a phone's scene box: the floor + shaft fill ~90 % of the screen
-const ZOOM = { min: 0.75, max: 4.2, focus: 2.4 };
+const ZOOM = { min: 0.75, max: 3, focus: 2 };
 const UI_LEFT = 230, UI_RIGHT = 360;                   // glass panels the building must not hide behind
 const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = ground foreshortening
 // Server desk numbers fill 1..20 in arrival order; seat them on the far side of the tables first (odd desks face
@@ -235,32 +235,12 @@ function presentBot(bot) {
   return { ...bot, effective_status: s };
 }
 
-// Frame the desks and lounge seats that are actually in use, instead of the whole empty floor.
-function occupiedTarget(floorId) {
-  const home = { x: HOME.x, z: HOME.z, zoom: 1 };
-  if (!assets || !lastState) return home;
-  const bots = Object.values(lastState.bots || {}).filter((b) => b.floor === floorId).map(presentBot);
-  if (!bots.length) return home;
-  const lounge = assignLounge(bots);
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, sx = 0, sz = 0, n = 0;
-  for (const b of bots) {
-    const deskIdx = (DESK_ORDER[(b.desk || 1) - 1] || 1) - 1;
-    const spot = lounge.get(b.id) || assets.spots.desks[deskIdx] || assets.spots.desks[0];
-    if (!spot) continue;
-    minX = Math.min(minX, spot.pos.x); maxX = Math.max(maxX, spot.pos.x);
-    minZ = Math.min(minZ, spot.pos.z); maxZ = Math.max(maxZ, spot.pos.z);
-    sx += spot.pos.x; sz += spot.pos.z; n++;
-  }
-  if (!n) return home;
-  const span = Math.max(maxX - minX, (maxZ - minZ) / SIN_E, 3.2);
-  const pad = 4.2;
-  // Close enough that empty desks are not the subject; ZOOM.max still caps a pan-in.
-  const zoom = clamp(VIEW_SPAN.w / (span + pad), 1.55, 2.85);
-  return {
-    x: clamp(HOME.x * 0.1 + (sx / n) * 0.9, -6.5, 6.5),
-    z: clamp(HOME.z * 0.1 + (sz / n) * 0.9, -5, 5),
-    zoom,
-  };
+// Whole floor. Desktop is a little tighter than zoom 1 so the slab fills the gap between the
+// side panels. A phone's scene box is only the band above the sheet, so it sits a bit closer
+// and the room still fits, edges included.
+function occupiedTarget() {
+  const phone = document.documentElement.classList.contains('bhq-phone');
+  return { x: HOME.x, z: HOME.z, zoom: phone ? 1.45 : 1.18 };
 }
 
 // Idle bots go to the lounge while seats last; the rest nap at their desks.

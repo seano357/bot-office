@@ -11,7 +11,7 @@ export const STATUS_COLOR = {
 const STATUS_LABEL = { waiting_user: 'Waiting for you', error: 'Error', stuck: 'Stuck?', done: 'Done', working: 'Working', idle: 'Resting' };
 const CAMERA_YAW = Math.PI / 4;     // isometric camera sits on +X +Z
 const RESTING_TURN = 0.42;          // blobs lean toward the camera a bit
-const MODEL_HEIGHT = 1.46;
+const MODEL_HEIGHT = 1.24;
 const LOOK_RANGE = 3.5;             // m: cursor ground point that makes a bot look
 const HOP_RANGE = 0.9;              // m: cursor this close makes it hop
 const HOP_COOLDOWN = 1.2;
@@ -57,13 +57,13 @@ export class Actor {
     this.pivot.add(this.modelWrap);
     this.root.add(this.pivot);
 
-    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 1.05), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }));
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }));
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.006;
     shadow.renderOrder = 1;
     this.pivot.add(shadow);
 
-    this.ring = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.9), new THREE.MeshBasicMaterial({ map: ringTexture, transparent: true, depthWrite: false, color: STATUS_COLOR.idle, opacity: 0 }));
+    this.ring = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 1.65), new THREE.MeshBasicMaterial({ map: ringTexture, transparent: true, depthWrite: false, color: STATUS_COLOR.idle, opacity: 0 }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 1;
     this.root.add(this.ring);
@@ -153,8 +153,9 @@ export class Actor {
     this.tagEl.style.setProperty('--c', color);
     this.selected = view.selectedBot === bot.id;
     this.nowMs = Number.isFinite(view.now) ? view.now : Date.now();
-    // Neighbours in the lounge don't share one tag baseline.
-    this.tag.position.x = status === 'idle' ? ((hash(this.id) % 5) - 2) * 0.22 : 0;
+    // Sideways nudge so two neighbours don't share one column. Wider on a phone, where a meter is only a few pixels.
+    const spread = document.documentElement.classList.contains('bhq-phone') ? 1.1 : 0.35;
+    this.tag.position.x = ((hash(this.id) % 3) - 1) * spread;
     this.renderTag();
 
     if (spot && (!this.spot || this.spot.pos.distanceToSquared(spot.pos) > 1e-4)) {
@@ -182,7 +183,9 @@ export class Actor {
     let sub = '';
     if (mode === 'attn' || mode === 'sel' || mode === 'hover') {
       const reason = reasonText(s, bot.step);
-      text = mode === 'attn' && reason ? `${name} · ${reason}` : name;
+      // Keep the reason, but short: a full sentence collides with the neighbour's name.
+      const brief = reason && reason.length > 14 ? `${reason.slice(0, 13).trimEnd()}…` : reason;
+      text = mode === 'attn' && brief ? `${name} · ${brief}` : name;
     } else if (mode === 'rest') {
       sub = lastDidLine(bot, this.nowMs);
     }
@@ -366,7 +369,12 @@ export class Actor {
     if (this.fx) this.tickCelebration(dt);
 
     // tag follows the host floor: hidden while that floor is faded / lifted
-    if (this.tagBaseY) this.tag.position.y = this.tagBaseY + (s === 'idle' && (hash(this.id) % 2) ? 0.72 : 0);
+    // Odd desks sit a step higher so a neighbour pair (lounge or table) doesn't share one baseline.
+    if (this.tagBaseY) {
+      const phone = document.documentElement.classList.contains('bhq-phone');
+      const odd = (Number(this.bot && this.bot.desk) || 0) % 2 === 1;
+      this.tag.position.y = this.tagBaseY + (odd ? (phone ? 2.6 : 1.25) : 0);
+    }
     this.tag.visible = this.tagEl.dataset.mode !== 'off' && this.hostAlpha > 0.5 && !this.retiring && this.scaleS.x > 0.6;     // no tag before the blob has dropped in
 
     this.tickEyes(dt);
@@ -425,7 +433,7 @@ function lastDidLine(bot, now) {
     break;
   }
   if (!step) return '';
-  if (step.length > 22) step = `${step.slice(0, 21).trimEnd()}…`;
+  if (step.length > 16) step = `${step.slice(0, 15).trimEnd()}…`;
   const ago = agoShort(now, t);
   return ago ? `last did ${step}, ${ago}` : `last did ${step}`;
 }

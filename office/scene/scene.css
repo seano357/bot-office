@@ -46,10 +46,12 @@
 .hqt[data-mode="rest"] .hqt-pill {
   height: 22px; padding: 0 9px; gap: 0; font-size: 11px; font-weight: 650;
 }
+.hqt[data-mode="name"] .hqt-text,
+.hqt[data-mode="rest"] .hqt-text { max-width: 96px; }
 .hqt[data-mode="name"] .hqt-dot,
 .hqt[data-mode="rest"] .hqt-dot { display: none; }
 .hqt[data-mode="rest"] .hqt-sub {
-  display: block; max-width: 148px; margin-top: 4px; padding: 3px 8px; border-radius: 999px; box-sizing: border-box;
+  display: block; max-width: 112px; margin-top: 3px; padding: 3px 8px; border-radius: 999px; box-sizing: border-box;
   background: rgba(255, 255, 255, .78); border: 1px solid rgba(255, 255, 255, .85);
   box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
   color: #3A3A3C; font-size: 10px; font-weight: 650; line-height: 1.25;
