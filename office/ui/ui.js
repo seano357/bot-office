@@ -1116,8 +1116,8 @@ function setPhone(on, land) {
   html.classList.toggle('bhq-land', U.land);
   if (on && !was) {
     if (p) S.headSlot.append(p.teamHead);
-    // Banner first, then the team. The usage card rides in the rail, under the team and above Routines.
-    S.body.append(...[U.need && U.need.root, d && d.waiting.root, p && p.tcard, p && p.rail, d && d.finished.root, S.feed].filter(Boolean));
+    // Banner, then the usage card, so both fit in the half-height sheet. The rail keeps Routines.
+    S.body.append(...[U.need && U.need.root, d && d.usage && d.usage.root, d && d.waiting.root, p && p.tcard, p && p.rail, d && d.finished.root, S.feed].filter(Boolean));
     S.open = S.start || U.land;
     S.start = false;
     sheetMeasure();
@@ -1134,6 +1134,7 @@ function setPhone(on, land) {
     if (p) {
       p.team.append(p.teamHead, p.tcard);
       if (p.rail) p.root.append(p.rail);
+      if (p.usageSlot && d && d.usage) p.usageSlot.append(d.usage.root);
       if (d && d.routines) p.rail.append(p.usageSlot, d.routines.root);
     }
     if (S.feed) { if (d && d.root.parentNode) d.root.parentNode.insertBefore(S.feed, d.root); else document.body.append(S.feed); }
@@ -1782,7 +1783,7 @@ function svgEl(tag, attrs) {
 
 function paintUsageChart(host, view, now) {
   host.textContent = '';
-  const W = 280, H = 96, L = 26, R = 8, T = 8, B = 16;
+  const W = 280, H = 78, L = 26, R = 8, T = 6, B = 14;
   const iw = W - L - R, ih = H - T - B;
   const start = view.start, end = view.end;
   const span = Math.max(1, end - start);

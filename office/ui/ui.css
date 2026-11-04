@@ -292,8 +292,8 @@
 .bhq-tcounts .is-zero b { color: var(--hi); }
 .bhq-tcounts .is-zero em { color: #C8C8D0; }
 
-.bhq-tcard { min-height: 0; flex: 0 1 auto; padding: 8px; border-radius: 24px; display: flex; flex-direction: column; }
-.bhq-members { min-height: 0; overflow-y: auto; }
+.bhq-tcard { min-height: 0; flex: 1 1 auto; padding: 8px; border-radius: 24px; display: flex; flex-direction: column; }
+.bhq-members { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 .bhq-member {
   position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 7px 12px 7px 8px; border-radius: 16px;
@@ -533,14 +533,19 @@
 .bhq-mseen[data-age="old"] { color: #FF8D86; }
 
 /* right rail: usage burn-rate card in the slot, Routines under it */
-.bhq-rail { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 0 1 auto; pointer-events: none; }
+.bhq-rail { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 0 1 auto; max-height: 70%; overflow-y: auto; pointer-events: none; }
+@media (max-height: 860px) {
+  .bhq-rail { max-height: 78%; }
+}
 .bhq-rail > * { pointer-events: auto; }
-.bhq-team { flex: 1 1 auto; }
+.bhq-team { flex: 1 1 auto; min-height: 120px; overflow: hidden; }
 .bhq-usage-slot { min-width: 0; }
 .bhq-usage-slot:empty { display: none; }
 .bhq-usage-slot > .bhq-dcard { width: 100%; }
 .bhq-rail .bhq-dcard.is-open.has-rows { max-height: min(280px, 36vh); }
-.bhq-rail .bhq-dcard[data-dock="usage"].is-open.has-rows { max-height: min(380px, 48vh); }
+.bhq-rail .bhq-dcard[data-dock="usage"].is-open.has-rows { max-height: none; }
+/* the right column is a fixed height so the rail stays on screen and the team list scrolls */
+#panel { height: calc(100vh - var(--below-top) - var(--gutter)); overflow: hidden; }
 
 /* usage: the week as a small chart, the pace in a sentence, each bot's share of it */
 .bhq-dcard[data-alert="jump"] {
@@ -873,7 +878,8 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
 .bhq-phone .bhq-sheet .bhq-eye { width: 32px; height: 32px; top: 6px; right: 36px; }
 
 /* ---------- the bot card: a sheet over the bottom ---------- */
-.bhq-phone #panel { left: 0; right: 0; width: auto; top: auto; bottom: 0; max-height: none; z-index: 22; }
+.bhq-phone #panel { left: 0; right: 0; width: auto; top: auto; bottom: 0; height: auto; max-height: none; overflow: visible; z-index: 22; }
+.bhq-phone .bhq-rail { max-height: none; overflow: visible; }
 .bhq-phone .bhq-card {
   position: relative; gap: 0; pointer-events: auto; overflow: hidden;
   max-height: 64vh; max-height: 64dvh;
