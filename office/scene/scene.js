@@ -168,7 +168,7 @@ function sync() {
   for (const [id, actor] of actors) if (!ids.has(id)) { actor.retire(); retiring.add(actor); actors.delete(id); }
 
   const maxShare = Math.max(0.0001, ...floorBots.map((b) => b.usage_share || 0));
-  const lounge = assignLounge(floorBots);
+  const lounge = assignLounge(floorBots.map(presentBot));
   const flags = new Array(20).fill(0);
   const delay = Math.max(0, switchedAt + 0.55 - nowSec);
   for (const bot of floorBots) {
@@ -178,14 +178,15 @@ function sync() {
       actors.set(bot.id, actor);
       attachModel(actor, bot);
     }
-    const deskIdx = (DESK_ORDER[(bot.desk || 1) - 1] || 1) - 1;
+    const posed = presentBot(bot);
+    const deskIdx = (DESK_ORDER[(posed.desk || 1) - 1] || 1) - 1;
     const desk = assets.spots.desks[deskIdx] || assets.spots.desks[0];
-    if ((bot.effective_status || bot.status) === 'working' && !lounge.has(bot.id)) flags[deskIdx] = 1;
-    actor.update(bot, lounge.get(bot.id) || desk, { maxShare, selectedBot: view.selectedBot });
+    if ((posed.effective_status || posed.status) === 'working' && !lounge.has(posed.id)) flags[deskIdx] = 1;
+    actor.update(posed, lounge.get(posed.id) || desk, { maxShare, selectedBot: view.selectedBot, now: parseTs(state.now) });
   }
   building.setScreens(flags);
   const floor = floors.find((f) => f.id === building.activeId);
-  building.setDisplayData({ floorName: floor ? floor.name : '', bots: floorBots, hour: sofiaHour(state.now) });
+  building.setDisplayData({ floorName: floor ? floor.name : '', bots: floorBots.map(presentBot), hour: sofiaHour(state.now) });
   if (hoveredId && !actors.has(hoveredId)) hoveredId = null;
   if (!settledOnce) {
     settledOnce = true;
@@ -214,6 +215,32 @@ function settle(seconds = 3) {
     for (const a of actors.values()) { a.hostAlpha = building.activeOpen()?.alpha ?? 1; a.tick(step, nowSec); }
     for (const a of retiring) { a.tick(step, nowSec); if (a.dead) retiring.delete(a); }
   }
+}
+
+function parseTs(s) {
+  const t = typeof s === 'number' ? s : Date.parse(s);
+  return Number.isFinite(t) ? t : Date.now();
+}
+
+// The latest line wins when it is still a wait, an error or stuck — a decayed `effective_status`
+// of idle must not park that bot in the lounge or drop the status ring.
+function presentStatus(bot) {
+  const line = (bot.history && bot.history[0] && bot.history[0].status) || bot.status;
+  if (line === 'waiting_user' || line === 'error' || line === 'stuck') return line;
+  return bot.effective_status || bot.status || 'idle';
+}
+function presentBot(bot) {
+  const s = presentStatus(bot);
+  if ((bot.effective_status || bot.status) === s) return bot;
+  return { ...bot, effective_status: s };
+}
+
+// Whole floor. Desktop is a little tighter than zoom 1 so the slab fills the gap between the
+// side panels. A phone's scene box is only the band above the sheet, so it sits a bit closer
+// and the room still fits, edges included.
+function occupiedTarget() {
+  const phone = document.documentElement.classList.contains('bhq-phone');
+  return { x: HOME.x, z: HOME.z, zoom: phone ? 1.45 : 1.18 };
 }
 
 // Idle bots go to the lounge while seats last; the rest nap at their desks.
@@ -263,11 +290,12 @@ function switchFloor(id, first) {
   hoveredId = null;
   building.setActive(id, { intro: first });
   const y = building.activeY + HOME.y;
-  cam.x.to(HOME.x); cam.z.to(HOME.z); cam.y.to(y); cam.zoom.to(0);
+  const spot = occupiedTarget(id);
+  cam.x.to(spot.x); cam.z.to(spot.z); cam.y.to(y); cam.zoom.to(Math.log(spot.zoom));
   if (first) {
-    cam.x.snap(HOME.x); cam.z.snap(HOME.z);
-    cam.y.snap(y - 2.6); cam.zoom.snap(Math.log(0.86));
-    cam.y.to(y, 0.1); cam.zoom.to(0, 0.1);
+    cam.x.snap(spot.x); cam.z.snap(spot.z);
+    cam.y.snap(y - 2.6); cam.zoom.snap(Math.log(spot.zoom * 0.86));
+    cam.y.to(y, 0.1); cam.zoom.to(Math.log(spot.zoom), 0.1);
   }
   switchedAt = nowSec;
   if (first) { building.prewarm(camera); hideLoader(); }
@@ -286,7 +314,8 @@ function hideLoader() {
 export function zoom(dir) {
   if (!building) return;
   if (dir === 'reset') {
-    cam.x.to(HOME.x); cam.z.to(HOME.z); cam.y.to(building.activeY + HOME.y); cam.zoom.to(0);
+    const spot = occupiedTarget(building.activeId);
+    cam.x.to(spot.x); cam.z.to(spot.z); cam.y.to(building.activeY + HOME.y); cam.zoom.to(Math.log(spot.zoom));
     return;
   }
   const z = clamp(Math.exp(cam.zoom.target) * (dir === 'in' ? 1.3 : 1 / 1.3), ZOOM.min, ZOOM.max);

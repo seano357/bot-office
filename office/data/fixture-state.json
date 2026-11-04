@@ -1,0 +1,523 @@
+{
+ "version": 7,
+ "now": "2026-11-04T19:00:00.000Z",
+ "demo": false,
+ "summary": {
+  "working": 1,
+  "idle": 2,
+  "waiting_user": 1,
+  "error": 1,
+  "stuck": 0,
+  "done": 0,
+  "total": 5
+ },
+ "usage": {
+  "period": "week",
+  "total_used_pct": 19,
+  "resets_at": "2026-11-10T20:00:00.000Z",
+  "updated_at": "2026-11-04T18:40:00.000Z"
+ },
+ "floors": [
+  {
+   "id": "roughwire",
+   "name": "Roughwire",
+   "order": 3,
+   "bots": [
+    "roughwire-marketing"
+   ],
+   "counts": {
+    "working": 0,
+    "idle": 0,
+    "waiting_user": 0,
+    "error": 1,
+    "stuck": 0,
+    "done": 0
+   },
+   "free_desks": 19
+  },
+  {
+   "id": "ops",
+   "name": "Ops",
+   "order": 2,
+   "bots": [
+    "ruby",
+    "office-manager"
+   ],
+   "counts": {
+    "working": 1,
+    "idle": 0,
+    "waiting_user": 1,
+    "error": 0,
+    "stuck": 0,
+    "done": 0
+   },
+   "free_desks": 18
+  },
+  {
+   "id": "finance",
+   "name": "Finance",
+   "order": 1,
+   "bots": [
+    "finance-bot",
+    "stock-trade"
+   ],
+   "counts": {
+    "working": 0,
+    "idle": 2,
+    "waiting_user": 0,
+    "error": 0,
+    "stuck": 0,
+    "done": 0
+   },
+   "free_desks": 18
+  }
+ ],
+ "bots": {
+  "ruby": {
+   "id": "ruby",
+   "name": "Ruby",
+   "floor": "ops",
+   "desk": 1,
+   "group": "Ops",
+   "status": "waiting_user",
+   "effective_status": "idle",
+   "step": "Waiting for Claude retest #11 results",
+   "task": "Claude retest #11",
+   "since": "2026-11-04T08:01:00.000Z",
+   "last_event": "2026-11-04T18:56:00.000Z",
+   "last_seen": "2026-11-04T18:56:00.000Z",
+   "usage_pct": null,
+   "usage_share": null,
+   "chat_url": "grokbot://app/v1/agent?id=ruby",
+   "avatar": "ruby",
+   "color": "#E23B3B",
+   "has_glb": false,
+   "look": {
+    "shape": "sphere",
+    "color": "#E23B3B",
+    "accessory": "none"
+   },
+   "today": {
+    "working_min": 0,
+    "events": 0,
+    "tasks_done": 0,
+    "hourly": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "history": [
+    {
+     "t": "2026-11-04T18:56:00.000Z",
+     "status": "waiting_user",
+     "step": "Waiting for Claude retest #11 results"
+    },
+    {
+     "t": "2026-11-04T18:52:00.000Z",
+     "status": "waiting_user",
+     "step": "Asked Claude to rerun retest #11 and post the numbers when the run finishes"
+    },
+    {
+     "t": "2026-11-04T08:01:00.000Z",
+     "status": "waiting_user",
+     "step": "Waiting for Claude retest #11 results"
+    }
+   ]
+  },
+  "office-manager": {
+   "id": "office-manager",
+   "name": "Office Manager",
+   "floor": "ops",
+   "desk": 2,
+   "group": "Ops",
+   "status": "working",
+   "effective_status": "working",
+   "step": "Building the usage card, reviewing the layout and where the burn chart sits",
+   "task": "Usage card",
+   "since": "2026-11-04T18:20:00.000Z",
+   "last_event": "2026-11-04T18:59:00.000Z",
+   "last_seen": "2026-11-04T18:59:00.000Z",
+   "usage_pct": null,
+   "usage_share": null,
+   "chat_url": "grokbot://app/v1/agent?id=office-manager",
+   "avatar": "office-manager",
+   "color": "#7B61FF",
+   "has_glb": false,
+   "look": {
+    "shape": "rounded_cube",
+    "color": "#7B61FF",
+    "accessory": "none"
+   },
+   "today": {
+    "working_min": 95,
+    "events": 6,
+    "tasks_done": 2,
+    "hourly": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "history": [
+    {
+     "t": "2026-11-04T18:59:00.000Z",
+     "status": "working",
+     "step": "Building the usage card, reviewing the layout and where the burn chart sits"
+    },
+    {
+     "t": "2026-11-04T18:38:00.000Z",
+     "status": "working",
+     "step": "Checking which bots actually reported usage this week"
+    },
+    {
+     "t": "2026-11-04T16:00:00.000Z",
+     "status": "done",
+     "step": "Posted the morning routines digest"
+    }
+   ]
+  },
+  "finance-bot": {
+   "id": "finance-bot",
+   "name": "Finance Bot",
+   "floor": "finance",
+   "desk": 1,
+   "group": "Finance",
+   "status": "idle",
+   "effective_status": "idle",
+   "step": "Waiting for next request",
+   "task": null,
+   "since": "2026-11-03T17:00:00.000Z",
+   "last_event": "2026-11-03T17:00:00.000Z",
+   "last_seen": "2026-11-03T17:00:00.000Z",
+   "usage_pct": 19,
+   "usage_share": 1,
+   "chat_url": null,
+   "avatar": "finance-bot",
+   "color": "#3DDC97",
+   "has_glb": false,
+   "look": {
+    "shape": "sphere",
+    "color": "#3DDC97",
+    "accessory": "none"
+   },
+   "today": {
+    "working_min": 0,
+    "events": 0,
+    "tasks_done": 0,
+    "hourly": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "history": [
+    {
+     "t": "2026-11-03T17:00:00.000Z",
+     "status": "idle",
+     "step": "Waiting for next request"
+    },
+    {
+     "t": "2026-11-03T16:50:00.000Z",
+     "status": "done",
+     "step": "Weekly close filed"
+    }
+   ]
+  },
+  "stock-trade": {
+   "id": "stock-trade",
+   "name": "Stock Trade Automater",
+   "floor": "finance",
+   "desk": 2,
+   "group": "Finance",
+   "status": "idle",
+   "effective_status": "idle",
+   "step": "Waiting for next request",
+   "task": null,
+   "since": "2026-11-04T11:00:00.000Z",
+   "last_event": "2026-11-04T11:00:00.000Z",
+   "last_seen": "2026-11-04T11:00:00.000Z",
+   "usage_pct": null,
+   "usage_share": null,
+   "chat_url": "grokbot://app/v1/agent?id=stock-trade",
+   "avatar": "stock-trade",
+   "color": "#3B82F6",
+   "has_glb": false,
+   "look": {
+    "shape": "cloud",
+    "color": "#3B82F6",
+    "accessory": "none"
+   },
+   "today": {
+    "working_min": 40,
+    "events": 3,
+    "tasks_done": 1,
+    "hourly": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "history": [
+    {
+     "t": "2026-11-04T11:00:00.000Z",
+     "status": "idle",
+     "step": "Waiting for next request"
+    },
+    {
+     "t": "2026-11-04T10:55:00.000Z",
+     "status": "done",
+     "step": "Daily paper check done, notes filed for the desk"
+    }
+   ]
+  },
+  "roughwire-marketing": {
+   "id": "roughwire-marketing",
+   "name": "Roughwire Marketing",
+   "floor": "roughwire",
+   "desk": 1,
+   "group": "Roughwire",
+   "status": "error",
+   "effective_status": "idle",
+   "step": "Market data feed timed out before the open and the retry never landed",
+   "task": "Open check",
+   "since": "2026-11-04T18:40:00.000Z",
+   "last_event": "2026-11-04T18:40:00.000Z",
+   "last_seen": "2026-11-04T18:40:00.000Z",
+   "usage_pct": null,
+   "usage_share": null,
+   "chat_url": "grokbot://app/v1/agent?id=roughwire-marketing",
+   "avatar": "roughwire-marketing",
+   "color": "#FF8A00",
+   "has_glb": false,
+   "look": {
+    "shape": "star4",
+    "color": "#FF8A00",
+    "accessory": "none"
+   },
+   "today": {
+    "working_min": 15,
+    "events": 2,
+    "tasks_done": 0,
+    "hourly": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "history": [
+    {
+     "t": "2026-11-04T18:40:00.000Z",
+     "status": "error",
+     "step": "Market data feed timed out before the open and the retry never landed"
+    },
+    {
+     "t": "2026-11-04T18:10:00.000Z",
+     "status": "working",
+     "step": "Pulling the pre-open tape"
+    }
+   ]
+  }
+ },
+ "feed": [
+  {
+   "t": "2026-11-04T18:59:00.000Z",
+   "bot": "office-manager",
+   "name": "Office Manager",
+   "status": "working",
+   "step": "Building the usage card, reviewing the layout and where the burn chart sits"
+  },
+  {
+   "t": "2026-11-04T18:57:00.000Z",
+   "bot": "office-manager",
+   "name": "Office Manager",
+   "status": "working",
+   "step": "Checking which bots actually reported usage this week before drawing the chart"
+  },
+  {
+   "t": "2026-11-04T18:56:00.000Z",
+   "bot": "ruby",
+   "name": "Ruby",
+   "status": "waiting_user",
+   "step": "Waiting for Claude retest #11 results"
+  },
+  {
+   "t": "2026-11-04T18:52:00.000Z",
+   "bot": "ruby",
+   "name": "Ruby",
+   "status": "waiting_user",
+   "step": "Asked Claude to rerun retest #11 and post the numbers when the run finishes"
+  },
+  {
+   "t": "2026-11-04T18:40:00.000Z",
+   "bot": "roughwire-marketing",
+   "name": "Roughwire Marketing",
+   "status": "error",
+   "step": "Market data feed timed out before the open and the retry never landed"
+  },
+  {
+   "t": "2026-11-04T18:38:00.000Z",
+   "bot": "office-manager",
+   "name": "Office Manager",
+   "status": "working",
+   "step": "Checking which bots actually reported usage this week"
+  },
+  {
+   "t": "2026-11-04T11:00:00.000Z",
+   "bot": "stock-trade",
+   "name": "Stock Trade Automater",
+   "status": "idle",
+   "step": "Daily paper check done, notes filed for the desk"
+  }
+ ],
+ "finished": [
+  {
+   "t": "2026-11-04T16:00:00.000Z",
+   "bot": "office-manager",
+   "name": "Office Manager",
+   "step": "Posted the morning routines digest"
+  },
+  {
+   "t": "2026-11-04T11:00:00.000Z",
+   "bot": "stock-trade",
+   "name": "Stock Trade Automater",
+   "step": "Daily paper check done"
+  }
+ ],
+ "routines": [
+  {
+   "bot": "office-manager",
+   "name": "Office Manager",
+   "routine": "Usage digest",
+   "schedule": "daily 18:00",
+   "next_run": "2026-11-04T21:00:00.000Z"
+  },
+  {
+   "bot": "ruby",
+   "name": "Ruby",
+   "routine": "Claude retest",
+   "schedule": "weekdays 09:00",
+   "next_run": "2026-11-05T09:00:00.000Z"
+  },
+  {
+   "bot": "stock-trade",
+   "name": "Stock Trade Automater",
+   "routine": "Daily paper",
+   "schedule": "weekdays 07:30",
+   "next_run": "2026-11-05T07:30:00.000Z"
+  },
+  {
+   "bot": "finance-bot",
+   "name": "Finance Bot",
+   "routine": "Weekly close",
+   "schedule": "Fridays 16:00",
+   "next_run": "2026-11-06T16:00:00.000Z"
+  }
+ ],
+ "routinesPending": false
+}

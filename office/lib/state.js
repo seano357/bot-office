@@ -389,6 +389,10 @@ export class StateStore {
 
   effective(bot, now) {
     if (bot.lastMs === null) return 'idle';
+    // A wait, an error or a stuck bot still needs a person until a new line says otherwise.
+    // Silence used to rewrite those as idle after 3h, so the card said "Resting · 11 h"
+    // while the latest line was still the wait.
+    if (bot.status === 'waiting_user' || bot.status === 'error' || bot.status === 'stuck') return bot.status;
     const age = now - bot.lastMs;
     if (age > LIMITS.IDLE_MS) return 'idle';
     switch (bot.status) {

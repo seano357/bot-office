@@ -11,7 +11,7 @@ export const STATUS_COLOR = {
 const STATUS_LABEL = { waiting_user: 'Waiting for you', error: 'Error', stuck: 'Stuck?', done: 'Done', working: 'Working', idle: 'Resting' };
 const CAMERA_YAW = Math.PI / 4;     // isometric camera sits on +X +Z
 const RESTING_TURN = 0.42;          // blobs lean toward the camera a bit
-const MODEL_HEIGHT = 1.0;
+const MODEL_HEIGHT = 1.24;
 const LOOK_RANGE = 3.5;             // m: cursor ground point that makes a bot look
 const HOP_RANGE = 0.9;              // m: cursor this close makes it hop
 const HOP_COOLDOWN = 1.2;
@@ -57,13 +57,13 @@ export class Actor {
     this.pivot.add(this.modelWrap);
     this.root.add(this.pivot);
 
-    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.85), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }));
+    const shadow = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false }));
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.006;
     shadow.renderOrder = 1;
     this.pivot.add(shadow);
 
-    this.ring = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({ map: ringTexture, transparent: true, depthWrite: false, color: STATUS_COLOR.idle, opacity: 0 }));
+    this.ring = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 1.65), new THREE.MeshBasicMaterial({ map: ringTexture, transparent: true, depthWrite: false, color: STATUS_COLOR.idle, opacity: 0 }));
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 1;
     this.root.add(this.ring);
@@ -71,11 +71,13 @@ export class Actor {
     this.tagEl = document.createElement('div');
     this.tagEl.className = 'hqt';
     this.tagEl.dataset.mode = 'off';
-    this.tagEl.innerHTML = '<div class="hqt-pill"><i class="hqt-dot"></i><span class="hqt-text"></span></div><div class="hqt-stem"></div>';
+    this.tagEl.innerHTML = '<div class="hqt-pill"><i class="hqt-dot"></i><span class="hqt-text"></span></div><div class="hqt-sub"></div><div class="hqt-stem"></div>';
     this.tagText = this.tagEl.querySelector('.hqt-text');
+    this.tagSub = this.tagEl.querySelector('.hqt-sub');
     this.tag = new CSS2DObject(this.tagEl);
     this.tag.center.set(0.5, 0);
-    this.tag.position.y = MODEL_HEIGHT + 0.24;
+    this.tagBaseY = MODEL_HEIGHT + 0.24;
+    this.tag.position.y = this.tagBaseY;
     this.tag.visible = false;
     this.pivot.add(this.tag);
 
@@ -119,7 +121,8 @@ export class Actor {
     model.position.x -= c.x; model.position.z -= c.z; model.position.y -= box.min.y;
     this.modelScale = model.scale.x || 1;
     box.setFromObject(model);
-    this.tag.position.y = box.max.y + 0.24;                       // pill floats just above this blob's head
+    this.tagBaseY = box.max.y + 0.24;                            // pill floats just above this blob's head
+    this.tag.position.y = this.tagBaseY;
     this.useModel(model, eyes, false);
   }
 
@@ -149,6 +152,10 @@ export class Actor {
     this.tagEl.dataset.status = status;
     this.tagEl.style.setProperty('--c', color);
     this.selected = view.selectedBot === bot.id;
+    this.nowMs = Number.isFinite(view.now) ? view.now : Date.now();
+    // Sideways nudge so two neighbours don't share one column. Wider on a phone, where a meter is only a few pixels.
+    const spread = document.documentElement.classList.contains('bhq-phone') ? 1.1 : 0.35;
+    this.tag.position.x = ((hash(this.id) % 3) - 1) * spread;
     this.renderTag();
 
     if (spot && (!this.spot || this.spot.pos.distanceToSquared(spot.pos) > 1e-4)) {
@@ -163,23 +170,32 @@ export class Actor {
     }
   }
 
-  // Quiet by default: selected (dark pill, name), needs-the-user (compact pill, short reason), hovered (pill, name).
+  // Name stays up. Selected (dark pill), needs-the-user (name + reason), hovered (name),
+  // everyone else a small name, and a resting bot adds "last did X, 2h ago".
   renderTag() {
     const s = this.status, bot = this.bot;
     if (!bot) return;
     const attn = s === 'waiting_user' || s === 'error' || s === 'stuck';
-    const mode = this.selected ? 'sel' : attn ? 'attn' : this.hovered ? 'hover' : 'off';
-    let text = bot.name || '';
-    if (mode === 'attn') {
+    const resting = s === 'idle' && !attn;
+    const mode = this.selected ? 'sel' : attn ? 'attn' : this.hovered ? 'hover' : resting ? 'rest' : 'name';
+    const name = bot.name || '';
+    let text = name;
+    let sub = '';
+    if (mode === 'attn' || mode === 'sel' || mode === 'hover') {
       const reason = reasonText(s, bot.step);
-      text = this.hovered ? `${bot.name} · ${reason}` : reason;
+      // Keep the reason, but short: a full sentence collides with the neighbour's name.
+      const brief = reason && reason.length > 14 ? `${reason.slice(0, 13).trimEnd()}…` : reason;
+      text = mode === 'attn' && brief ? `${name} · ${brief}` : name;
+    } else if (mode === 'rest') {
+      sub = lastDidLine(bot, this.nowMs);
     }
-    const key = `${mode}|${s}|${text}`;
+    const key = `${mode}|${s}|${text}|${sub}`;
     if (key === this.tagKey) return;
     this.tagKey = key;
     this.tagEl.dataset.mode = mode;
     this.tagText.textContent = text;
-    this.tagEl.title = '';
+    this.tagSub.textContent = sub;
+    this.tagEl.title = sub ? `${name}. ${sub}` : name;
   }
 
   spotIsLounge() { return !!this.spot && this.spot.lounge; }
@@ -353,6 +369,12 @@ export class Actor {
     if (this.fx) this.tickCelebration(dt);
 
     // tag follows the host floor: hidden while that floor is faded / lifted
+    // Odd desks sit a step higher so a neighbour pair (lounge or table) doesn't share one baseline.
+    if (this.tagBaseY) {
+      const phone = document.documentElement.classList.contains('bhq-phone');
+      const odd = (Number(this.bot && this.bot.desk) || 0) % 2 === 1;
+      this.tag.position.y = this.tagBaseY + (odd ? (phone ? 2.6 : 1.25) : 0);
+    }
     this.tag.visible = this.tagEl.dataset.mode !== 'off' && this.hostAlpha > 0.5 && !this.retiring && this.scaleS.x > 0.6;     // no tag before the blob has dropped in
 
     this.tickEyes(dt);
@@ -396,6 +418,34 @@ export class Actor {
 
 export function jelly(color) {
   return new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.18, sheen: 0.3 });
+}
+
+// "last did daily paper check, 2h ago". Skips the generic idle line ("waiting for a new task").
+function lastDidLine(bot, now) {
+  const generic = /^\s*waiting for (a new|the next|next)\b/i;
+  let step = '';
+  let t = NaN;
+  for (const h of bot.history || []) {
+    const s = (h.step || '').trim();
+    if (!s || generic.test(s)) continue;
+    step = s;
+    t = Date.parse(h.t);
+    break;
+  }
+  if (!step) return '';
+  if (step.length > 16) step = `${step.slice(0, 15).trimEnd()}…`;
+  const ago = agoShort(now, t);
+  return ago ? `last did ${step}, ${ago}` : `last did ${step}`;
+}
+
+function agoShort(now, t) {
+  if (!Number.isFinite(now) || !Number.isFinite(t)) return '';
+  const min = Math.floor((now - t) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
 }
 
 function reasonText(status, step) {
