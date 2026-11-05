@@ -145,6 +145,15 @@ if (feedFromLink(location)) {                              // #<topic>, #<topic>
 // ---------- static preview: local simulation ----------
 
 async function startLocalDemo() {
+  // ?replay=rename plays office/data/rename-lines.json (old names, then the new roster). No ntfy.
+  if (params.get('replay') === 'rename') {
+    const lines = await (await fetch('./data/rename-lines.json', { cache: 'no-store' })).json();
+    const { playLines } = await import('./lib/journal.js');
+    state = playLines(lines, Date.parse('2026-11-04T19:00:00Z'));
+    state.demoLocal = true;
+    render();
+    return;
+  }
   // ?fixture=1 is a frozen local office (waiting / error / working / idle). It never touches ntfy.
   const file = params.get('fixture') ? './data/fixture-state.json' : './data/demo-state.json';
   const res = await fetch(file, { cache: 'no-store' });
