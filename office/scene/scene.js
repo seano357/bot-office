@@ -14,6 +14,7 @@ import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
 import { sofiaHour, fontsPromise } from './walls.js';
 import { createCity } from './city.js';
+import { mountBackdrop } from './backdrop.js';
 
 // Relative to the page (not the site root), so the office also works when it is published in a sub-folder, e.g.
 // <site>/office/ -> ../assets. Locally the page is at `/`, where this is /assets.
@@ -29,7 +30,7 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 // the camera), neighbours alternating so tags never collide.
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-let renderer, labels, camera, scene, container, callbacks, daylight, building, post, city;
+let renderer, labels, camera, scene, container, callbacks, daylight, building, post, city, backdrop;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -126,6 +127,11 @@ export function initScene(el, cbs = {}) {
   });
 
   post = createPost(renderer, scene, camera);
+  backdrop = mountBackdrop(container, (on) => {
+    city?.setPhoto(on);
+    post?.setPhoto(on);
+    if (on) container.style.background = '#07060f';
+  });
 
   addPointerHandlers();
   new ResizeObserver(resize).observe(container);
@@ -634,6 +640,7 @@ function frame(t) {
   stepCamera(dt);
   if (building) building.update(dt, nowMs);
   if (city) { city.follow(building ? building.activeY : 0); city.update(dt, nowSec); }
+  if (backdrop) backdrop.nudge(cam.x.x - HOME.x, cam.z.x - HOME.z);
   if (pointerDirty && !drag?.panning) { pointerDirty = false; setHover(pick()); }
   updateCursorGround();
 

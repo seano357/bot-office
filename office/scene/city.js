@@ -23,13 +23,17 @@ export function createCity(scene) {
     prevAfter.apply(this, args);
   };
 
+  // Sky, towers and rain. Hidden once the painted plate has loaded; this is the fallback.
+  const outside = new THREE.Group();
+  outside.name = 'lofi-skyline';
+  root.add(outside);
   const towers = makeSkyline(PHONE ? 8 : 16);
-  root.add(towers.mesh);
+  outside.add(towers.mesh);
   const signs = makeSigns(towers.spots);
-  for (const s of signs) root.add(s);
+  for (const s of signs) outside.add(s);
   const clouds = makeClouds(PHONE ? 3 : 5);
-  root.add(clouds);
-  root.add(makeStars(PHONE ? 40 : 90));
+  outside.add(clouds);
+  outside.add(makeStars(PHONE ? 40 : 90));
 
   const cozy = new THREE.Group();
   root.add(cozy);
@@ -42,20 +46,22 @@ export function createCity(scene) {
 
   let rain = null;
   if (!PHONE && !REDUCED) rain = makeRain();
-  if (rain) root.add(rain);
+  if (rain) outside.add(rain);
 
   return {
     follow(y) { root.position.y = y || 0; },
+    setPhoto(on) { outside.visible = !on; },
     update(dt, t) {
       if (REDUCED) return;
+      for (let i = 0; i < bulbs.length; i++) {
+        const k = 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(t * 1.3 + i * 0.7));
+        bulbs[i].material.color.setRGB(k, 0.82 * k, 0.62 * k);
+      }
+      if (!outside.visible) return;
       const tw = 0.82 + 0.18 * (0.5 + 0.5 * Math.sin(t * 0.7));
       towers.mat.color.setRGB(tw, tw, tw);
       for (let i = 0; i < signs.length; i++) {
         signs[i].material.opacity = 0.62 + 0.32 * (0.5 + 0.5 * Math.sin(t * 1.6 + i * 1.1));
-      }
-      for (let i = 0; i < bulbs.length; i++) {
-        const k = 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(t * 1.3 + i * 0.7));
-        bulbs[i].material.color.setRGB(k, 0.82 * k, 0.62 * k);
       }
       driftClouds(clouds, dt);
       if (rain) stepRain(rain, dt);

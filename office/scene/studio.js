@@ -63,7 +63,7 @@ const COMPOSE_FS = /* glsl */`
   uniform vec3 stop0, stop1, stop2, shadowC;
   uniform vec2 centre, radii, push[3];
   uniform vec3 layerW;
-  uniform float stopMid;
+  uniform float stopMid, photo;
   varying vec2 vUv;
 
   float hash( vec2 p ) { vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
@@ -83,6 +83,8 @@ const COMPOSE_FS = /* glsl */`
     dens *= 1.0 - smoothstep( 0.5, 0.9, texture2D( tHold, vUv ).r );    // nothing inside the silhouette: clear glass stays clear
     bg = mix( bg, shadowC, dens );
 
+    // A painted plate sits behind the canvas. Empty sky keeps its alpha so that image shows through.
+    if ( photo > 0.5 ) { gl_FragColor = vec4( c.rgb, c.a ); return; }
     vec3 rgb = c.rgb + bg * ( 1.0 - c.a );                              // c is premultiplied
     float n = hash( gl_FragCoord.xy ) + hash( gl_FragCoord.xy + 17.31 ) - 1.0;   // triangular dither, +-1 level
     gl_FragColor = vec4( rgb + n / 255.0, 1.0 );
@@ -112,6 +114,7 @@ export class StudioPass extends Pass {
         centre: { value: new THREE.Vector2(...STUDIO.centre) }, radii: { value: new THREE.Vector2(...STUDIO.radii) },
         push: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
         layerW: { value: new THREE.Vector3(L0.w, L1.w, L2.w) },
+        photo: { value: 0 },
       },
       vertexShader: QUAD_VS, fragmentShader: COMPOSE_FS, depthTest: false, depthWrite: false,
     });
@@ -120,6 +123,8 @@ export class StudioPass extends Pass {
     this.size = new THREE.Vector2(1, 1);
     this.setSize(1, 1);
   }
+
+  setPhoto(on) { this.composeMat.uniforms.photo.value = on ? 1 : 0; }
 
   // w, h = drawing-buffer pixels. Targets: silhouette + contact pair at 1/4, penumbra pair at 1/8, ambient at 1/32
   // (with a 1/16 step on the way down so every halving is an exact 2x2 average).
