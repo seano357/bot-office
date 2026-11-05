@@ -8,7 +8,7 @@
 //
 // Lines on the channel (one JSON object per message, at most 4 KB, anything else is dropped):
 //   {"bot":"…","status":"working|idle|waiting_user|error|done","step":"…"}     a status change
-//   {"roster":["Bot A","Bot B"]}                                                every bot appears, idle until it posts
+//   {"roster":["Bot A","Bot B"]}                                                newest roster (by time) is who is on the floor
 //   {"looks":{"Bot A":{"shape":"sphere","color":"#RRGGBB","accessory":"none"}}} how each bot's blob looks
 //   {"type":"usage","total_used_pct":37,"resets_at":"…","bots":{"Bot A":4.1}}  the weekly limit meter
 //   {"groups":{"Bot A":"Content"}}                                            teams, one floor each
@@ -21,6 +21,7 @@
 import { StateStore, botIdFor } from './lib/state.js';
 import { FEED_BASE, feedFromLink } from './lib/feedbase.js';
 import { mergeReadings, normalizeReading, readingFrom } from './lib/usage.js';
+import { filterRosterReadings, pruneRoutines } from './lib/journal.js';
 
 // Self-hosted copy: ntfy.sh is the only mailbox. The original's second mailbox (relay.0xcodila.com) and its visit
 // counter (POST relay.0xcodila.com/_beacon) are removed.
@@ -124,9 +125,9 @@ export async function connectFeed({ topic, servers }, onState) {
     if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return false;
     const t = typeof rec.t === 'string' ? rec.t : new Date(time * 1000).toISOString();
     if (Array.isArray(rec.roster)) {
-      for (const name of rec.roster.slice(0, 400)) {
-        if (typeof name === 'string' && name.trim() && !store.bots.has(botIdFor(name))) store.apply({ t, bot: name, status: 'idle', step: '', listed: true }, { replay });
-      }
+      const ms = Number.isFinite(Date.parse(t)) ? Date.parse(t) : (Number(time) || 0) * 1000;
+      store.setRoster(rec.roster, ms);
+      pruneRoutines(routines, store.roster);
       return true;
     }
     if (isMap(rec.looks)) {
@@ -151,6 +152,7 @@ export async function connectFeed({ topic, servers }, onState) {
     if (isMap(rec.routines)) {
       const name = typeof rec.routines.bot === 'string' ? rec.routines.bot.trim().slice(0, 80) : '';
       if (!name || !Array.isArray(rec.routines.items)) return false;
+      if (store.roster && !store.roster.ids.has(botIdFor(name))) return true;   // renamed away: do not keep the routine
       const items = rec.routines.items.slice(0, 50).filter(isMap).map((r) => ({
         routine: String(r.name ?? '').slice(0, 80), schedule: String(r.schedule ?? '').slice(0, 80),
         next_run: Number.isFinite(Date.parse(r.next_run)) ? new Date(r.next_run).toISOString() : null,
@@ -187,11 +189,13 @@ export async function connectFeed({ topic, servers }, onState) {
       if (rec?.status !== 'done' || typeof rec.bot !== 'string') continue;
       finished.push({ t: typeof rec.t === 'string' ? rec.t : new Date(l.time * 1000).toISOString(), bot: botIdFor(rec.bot), name: rec.bot.slice(0, 80), step: String(rec.step ?? '').slice(0, 80) });
     }
-    s.finished = finished;
+    const onRoster = store.roster && store.roster.ids;
+    s.finished = onRoster ? finished.filter((f) => onRoster.has(f.bot)) : finished;
     s.routines = [...routines].flatMap(([bot, { name, items }]) => items.map((r) => ({ bot, name, ...r })))
+      .filter((r) => !onRoster || onRoster.has(r.bot))
       .sort((a, b) => (a.next_run ? Date.parse(a.next_run) : Infinity) - (b.next_run ? Date.parse(b.next_run) : Infinity));
     s.routinesPending = !historyDone;
-    s.usageReadings = usageHist;
+    s.usageReadings = filterRosterReadings(usageHist, store.roster);
     s.check = check && Date.now() - check.ms < CHECK_MS ? {
       t: new Date(check.ms).toISOString(),
       bots: check.names.map((name) => {                  // answered = a status line of its own at or after the check

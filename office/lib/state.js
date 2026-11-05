@@ -165,6 +165,7 @@ export class StateStore {
     this.floorSeq = 0;
     this.feed = [];              // newest first
     this.usage = { period: 'week', total: null, resetsMs: null, updatedMs: null, bots: new Map(), routines: {} };
+    this.roster = null;          // { ms, ids: Set } once a roster line has been accepted; null = no roster yet
     this.schedules = new Map();  // bot id -> Map(routine -> entry)
     this.floorsCfg = normFloorsCfg(null);
     this.botsCfg = normBotsCfg(null);
@@ -207,6 +208,9 @@ export class StateStore {
     const name = cleanStr(rec.bot, 80);
     if (!name) { this.meta.skipped++; return; }
     const id = botIdFor(name);
+    // A roster is the membership list. Names it does not include never become bots,
+    // even when an older status line is replayed after the roster.
+    if (this.roster && !this.roster.ids.has(id)) { this.meta.skipped++; return; }
     let bot = this.bots.get(id);
     if (!bot) {
       if (this.bots.size >= LIMITS.MAX_BOTS) { this.meta.skipped++; return; }
@@ -293,7 +297,8 @@ export class StateStore {
       const m = new Map();
       for (const [k, v] of Object.entries(rec.bots)) {
         const n = num(v);
-        if (n !== null) m.set(botIdFor(k), n);
+        const id = botIdFor(k);
+        if (n !== null && !(this.roster && !this.roster.ids.has(id))) m.set(id, n);
       }
       u.bots = m;
       if (prevMs !== null && ms > prevMs) this.findUnreported(prev, m, prevMs, ms);
@@ -462,6 +467,53 @@ export class StateStore {
 
   reassignAll() {
     for (const bot of this.bots.values()) this.assign(bot);
+  }
+
+  /**
+   * The newest roster (by timestamp) is who is on the floor. An older list is ignored, so replay
+   * order cannot bring a renamed bot back. With no roster at all, bots stay additive.
+   * Returns true when membership changed.
+   */
+  setRoster(names, ms) {
+    if (!Number.isFinite(ms)) return false;
+    if (this.roster && ms < this.roster.ms) return false;
+    const ids = new Set();
+    const clean = [];
+    for (const raw of (Array.isArray(names) ? names : []).slice(0, 400)) {
+      const name = cleanStr(raw, 80);
+      if (!name) continue;
+      const id = botIdFor(name);
+      if (ids.has(id)) continue;
+      ids.add(id);
+      clean.push(name);
+    }
+    this.roster = { ms, ids };
+    let changed = false;
+    for (const id of [...this.bots.keys()]) {
+      if (!ids.has(id)) { this.removeBot(id); changed = true; }
+    }
+    for (const name of clean) {
+      if (this.bots.has(botIdFor(name))) continue;
+      this.apply({ t: this.time.iso(ms), bot: name, status: 'idle', step: '', listed: true }, { replay: true });
+      changed = true;
+    }
+    if (changed) {
+      this.feed = this.feed.filter((f) => ids.has(f.id));
+      for (const id of [...this.usage.bots.keys()]) if (!ids.has(id)) this.usage.bots.delete(id);
+      this.cache = null;
+      this.dirty = true;
+    }
+    return changed;
+  }
+
+  removeBot(id) {
+    const bot = this.bots.get(id);
+    if (!bot) return;
+    if (bot.assign) this.members.get(bot.assign.floor)?.delete(bot.assign.desk);
+    this.bots.delete(id);
+    this.schedules.delete(id);
+    this.cache = null;
+    this.dirty = true;
   }
 
   floorRank(f) {
