@@ -27,9 +27,8 @@ export function mountBackdrop(container, onPhoto) {
   const shade = document.createElement('div');
   shade.className = 'lofi-bg-shade';
   shade.hidden = true;
-  wrap.append(pic);
+  wrap.append(pic, shade);
   container.prepend(wrap);
-  container.append(shade);
   if (!REDUCED) wrap.classList.add('is-drift');
 
   let live = false;
@@ -57,8 +56,10 @@ export function mountBackdrop(container, onPhoto) {
   return {
     nudge(x, z) {
       if (!live || REDUCED) return;
-      wrap.style.setProperty('--lofi-x', `${(-x * 8).toFixed(1)}px`);
-      wrap.style.setProperty('--lofi-z', `${(z * 5).toFixed(1)}px`);
+      const px = Math.max(-12, Math.min(12, -x * 3));
+      const pz = Math.max(-8, Math.min(8, z * 2));
+      wrap.style.setProperty('--lofi-x', `${px.toFixed(1)}px`);
+      wrap.style.setProperty('--lofi-z', `${pz.toFixed(1)}px`);
     },
   };
 }

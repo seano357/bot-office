@@ -46,7 +46,7 @@ export function createCity(scene) {
 
   let rain = null;
   if (!PHONE && !REDUCED) rain = makeRain();
-  if (rain) outside.add(rain);
+  if (rain) root.add(rain);
 
   return {
     follow(y) { root.position.y = y || 0; },
@@ -57,6 +57,7 @@ export function createCity(scene) {
         const k = 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(t * 1.3 + i * 0.7));
         bulbs[i].material.color.setRGB(k, 0.82 * k, 0.62 * k);
       }
+      if (rain) stepRain(rain, dt);
       if (!outside.visible) return;
       const tw = 0.82 + 0.18 * (0.5 + 0.5 * Math.sin(t * 0.7));
       towers.mat.color.setRGB(tw, tw, tw);
@@ -64,7 +65,6 @@ export function createCity(scene) {
         signs[i].material.opacity = 0.62 + 0.32 * (0.5 + 0.5 * Math.sin(t * 1.6 + i * 1.1));
       }
       driftClouds(clouds, dt);
-      if (rain) stepRain(rain, dt);
     },
   };
 }
@@ -225,7 +225,7 @@ function makeRain() {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   return new THREE.Points(geo, new THREE.PointsMaterial({
-    color: 0xf2ecff, size: 0.13, transparent: true, opacity: 0.55, depthWrite: false,
+    color: 0xe8e0ff, size: 0.09, transparent: true, opacity: 0.28, depthWrite: false,
   }));
 }
 

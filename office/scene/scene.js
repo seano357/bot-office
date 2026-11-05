@@ -31,6 +31,7 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
 let renderer, labels, camera, scene, container, callbacks, daylight, building, post, city, backdrop;
+let plateOn = false;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -128,9 +129,11 @@ export function initScene(el, cbs = {}) {
 
   post = createPost(renderer, scene, camera);
   backdrop = mountBackdrop(container, (on) => {
+    plateOn = on;
     city?.setPhoto(on);
     post?.setPhoto(on);
-    if (on) container.style.background = '#07060f';
+    container.style.background = on ? '#120818' : studioCss();
+    resize();
   });
 
   addPointerHandlers();
@@ -368,7 +371,11 @@ function resize() {
   camera.top = halfH; camera.bottom = -halfH;
   // keep the building clear of the glass panels: shift the view so its centre is the free space between them
   const shift = WALLPAPER ? 0 : clamp((w - 900) / 600, 0, 1) * (UI_RIGHT - UI_LEFT) / 2;   // wallpaper: no panels, centred
-  if (shift > 0.5) camera.setViewOffset(w, h, shift, 0, w, h); else camera.clearViewOffset();
+  // The painted terrace is the bottom of the plate. Drop the floor onto that lower-middle band.
+  const phone = document.documentElement.classList.contains('bhq-phone');
+  const drop = plateOn && !WALLPAPER ? Math.round(h * (phone ? 0.07 : 0.1)) : 0;
+  if (shift > 0.5 || drop) camera.setViewOffset(w, h, Math.max(0, shift), -drop, w, h);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
 }
 

@@ -11,21 +11,20 @@
 /* Painted city, behind the canvas. The shade is a sibling above the canvas and under the name tags. */
 .lofi-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .lofi-bg picture, .lofi-bg img {
-  position: absolute; left: -4%; top: -4%; width: 108%; height: 108%;
-  object-fit: cover; object-position: center 42%;
+  position: absolute; left: -3%; top: -3%; width: 106%; height: 106%;
+  object-fit: cover; object-position: center 70%;
 }
-.lofi-bg.is-drift img { animation: lofi-drift 46s ease-in-out infinite alternate; }
+.lofi-bg.is-drift img { animation: lofi-drift 70s ease-in-out infinite alternate; }
 .lofi-bg { transform: translate3d(var(--lofi-x, 0), var(--lofi-z, 0), 0); }
 @keyframes lofi-drift {
-  from { transform: translate3d(-1.2%, -0.4%, 0); }
-  to { transform: translate3d(1.2%, 0.6%, 0); }
+  from { transform: translate3d(-0.45%, -0.15%, 0); }
+  to { transform: translate3d(0.45%, 0.2%, 0); }
 }
 .lofi-bg-shade {
-  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(10, 6, 20, .66) 0%, rgba(10, 6, 20, .2) 15%, transparent 30%, transparent 68%, rgba(10, 6, 20, .24) 84%, rgba(10, 6, 20, .66) 100%),
-    linear-gradient(180deg, rgba(8, 5, 16, .55) 0%, transparent 14%, transparent 72%, rgba(8, 5, 16, .58) 100%),
-    radial-gradient(120% 90% at 50% 46%, transparent 46%, rgba(6, 4, 12, .42) 100%);
+    linear-gradient(90deg, rgba(8, 4, 16, .45) 0%, rgba(8, 4, 16, .12) 14%, transparent 28%, transparent 72%, rgba(8, 4, 16, .14) 86%, rgba(8, 4, 16, .42) 100%),
+    linear-gradient(180deg, rgba(6, 4, 14, .28) 0%, transparent 12%, transparent 78%, rgba(6, 4, 14, .35) 100%);
 }
 html[data-lofi="photo"] .hq-canvas { background: transparent; }
 @media (prefers-reduced-motion: reduce) {
