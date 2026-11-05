@@ -88,7 +88,9 @@ export class Actor {
   // ---------- model ----------
 
   setPlaceholderModel(color) {
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 40, 28), jelly(color));
+    const bodyMat = jelly(color);
+    glowBody(bodyMat);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 40, 28), bodyMat);
     body.scale.set(1, 0.95, 0.82);
     body.position.y = 0.44;
     const eyeGeo = new THREE.CapsuleGeometry(0.042, 0.085, 6, 12);
@@ -106,9 +108,10 @@ export class Actor {
     let eyes = [];
     model.traverse((o) => {
       if (/^eye_[LR]/.test(o.name)) eyes.push(o);
-      if (o.isMesh && tint && /body/.test(o.name + (o.parent?.name || ''))) {
+      if (o.isMesh && /body/.test(o.name + (o.parent?.name || ''))) {
         o.material = o.material.clone();
-        o.material.color.set(tint);
+        if (tint) o.material.color.set(tint);
+        glowBody(o.material);
       }
     });
     eyes = eyes.filter((e) => !eyes.some((p) => p !== e && isAncestor(p, e)));
@@ -418,6 +421,13 @@ export class Actor {
 
 export function jelly(color) {
   return new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.18, sheen: 0.3 });
+}
+
+// A little of the bot's own colour, so it lifts off the dark floor without changing the hue.
+function glowBody(mat) {
+  if (!mat || !mat.emissive || !mat.color) return;
+  mat.emissive.copy(mat.color).multiplyScalar(0.7);
+  mat.emissiveIntensity = 0.46;
 }
 
 // "last did daily paper check, 2h ago". Skips the generic idle line ("waiting for a new task").

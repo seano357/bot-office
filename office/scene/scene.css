@@ -99,16 +99,16 @@ html[data-lofi="photo"] .hq-canvas { background: transparent; }
 
 /* night: dark glass; the selected pill flips to light */
 :root[data-daylight="night"] .hqt-pill {
-  background: rgba(28, 28, 30, .66); border-color: rgba(255, 255, 255, .12); color: #F5F5F7;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  background: rgba(22, 16, 32, .88); border-color: rgba(255, 255, 255, .16); color: #F6F3FC;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
 }
 :root[data-daylight="night"] .hqt-stem { background: rgba(255, 255, 255, .28); }
 :root[data-daylight="night"] .hqt[data-mode="sel"] .hqt-pill { background: #F5F5F7; color: #1D1D1F; border-color: transparent; }
 :root[data-daylight="night"] .hqt[data-mode="sel"] .hqt-stem { background: rgba(255, 255, 255, .55); }
 html.bhq-phone .hqt[data-mode="rest"] .hqt-sub { display: none; }
 :root[data-daylight="night"] .hqt[data-mode="rest"] .hqt-sub {
-  background: rgba(28, 28, 30, .72); border-color: rgba(255, 255, 255, .12); color: #E6E6EC;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+  background: rgba(22, 16, 32, .88); border-color: rgba(255, 255, 255, .14); color: #E6E0F2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
 }
 
 @keyframes hqt-in { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }

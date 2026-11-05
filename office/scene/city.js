@@ -38,7 +38,7 @@ export function createCity(scene) {
   const cozy = new THREE.Group();
   root.add(cozy);
   const bulbs = stringLights(cozy, PHONE ? 9 : 14);
-  const lamp = new THREE.PointLight(0xffb078, 0.38, 10, 2);
+  const lamp = new THREE.PointLight(0xffb078, 0.9, 16, 2);
   lamp.position.set(-0.4, 2.05, -4.8);
   cozy.add(lamp);
   // Open floor, clear of the tables, the bar and the existing trees.
@@ -195,7 +195,7 @@ function plant(x, z) {
   pot.position.y = 0.12;
   const leaf = new THREE.Mesh(
     new THREE.SphereGeometry(0.32, 10, 8),
-    new THREE.MeshStandardMaterial({ color: 0x2f8f62, roughness: 0.82 }),
+    new THREE.MeshStandardMaterial({ color: 0x176b40, roughness: 0.84 }),
   );
   leaf.position.y = 0.46;
   leaf.scale.y = 0.75;

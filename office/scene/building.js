@@ -16,7 +16,16 @@ const BLUR_TAIL = 0.14;                 // s for the blur to clear after the swa
 const BLUR_PX = 2;
 const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CAB_H = 2.2;
-const NIGHT_TINT = [0.2, 0.26, 0.42];   // used when a baked mesh has no night lightmap
+const NIGHT_TINT = [0.22, 0.16, 0.24];   // used when a baked mesh has no night lightmap
+// The night jpegs are a warm mid-brown. These multipliers pull each surface toward the painted terrace.
+const NIGHT_SURFACE = {
+  baked_floor: [0.40, 0.28, 0.38],
+  baked_wall_left: [0.52, 0.40, 0.52],
+  baked_slab_top: [0.30, 0.22, 0.32],
+};
+function nightTint(name) {
+  return NIGHT_SURFACE[name] || (name.startsWith('style_') ? NIGHT_SURFACE.baked_floor : [1, 1, 1]);
+}
 
 // Night lightmaps (assets/office/night/<mesh name>.jpg) are loaded lazily, only once --night > 0, shared by every
 // floor clone and disposed again after a stretch of full day (they are big: 3072x2304 for the floor).
@@ -223,7 +232,7 @@ export class Building {
           loadNightTexture(this.baseUrl, rec.name).then((t) => {
             if (!t) { rec.state = 'missing'; return; }
             if (rec.dayMap) { t.wrapS = rec.dayMap.wrapS; t.wrapT = rec.dayMap.wrapT; t.channel = rec.dayMap.channel; }
-            rec.tex = t; rec.uMap.value = t; rec.uTint.value.set(1, 1, 1); rec.state = 'ready';
+            rec.tex = t; rec.uMap.value = t; rec.uTint.value.set(...nightTint(rec.name)); rec.state = 'ready';
             if (rec.name === 'baked_floor') this.styleNight(t.image);
           });
         }
@@ -243,7 +252,7 @@ export class Building {
       if (!rec.name.startsWith('style_')) continue;
       if (rec.styleNight) { rec.styleNight.dispose(); rec.styleNight = null; }
       const t = maps.get(rec.name);
-      if (t) { rec.styleNight = t; rec.uMap.value = t; rec.uTint.value.set(1, 1, 1); } else { rec.uMap.value = rec.dayMap; rec.uTint.value.set(...NIGHT_TINT); }
+      if (t) { rec.styleNight = t; rec.uMap.value = t; rec.uTint.value.set(...nightTint(rec.name)); } else { rec.uMap.value = rec.dayMap; rec.uTint.value.set(...NIGHT_TINT); }
     }
   }
 
