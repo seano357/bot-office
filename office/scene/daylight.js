@@ -62,13 +62,13 @@ const DUSK = P({                                          // after sunset: lamps
   shadow: 0.32, tint: [1.3, 1.02, 0.84], floorSun: 0, floorSunC: rgb('#FFD27E'),
   glassC: rgb('#4A5487'), glassA: 0.8, glassE: 0.5,
 });
-const NIGHT = P({                                         // dim warm room, lamp pools on the desks, deep navy glass
-  night: 1, bake: 0.6, lamps: 1, windows: 1,
-  sunI: 0.2, sunC: rgb('#8CA6FF'),
-  hemiI: 0.4, hemiSky: rgb('#6A6158'), hemiGnd: rgb('#2A2420'),
-  fillI: 0.15, fillC: rgb('#8C8098'), envI: 0.2, exposure: 1.0,
-  shadow: 0.4, tint: [0.95, 0.8, 0.62], floorSun: 0, floorSunC: rgb('#FFEBD2'),
-  glassC: rgb('#1A2A66'), glassA: 0.92, glassE: 0.5,
+const NIGHT = P({                                         // loft at night: dark terrace, warm lamps, neon in the glass
+  night: 1, bake: 0.94, lamps: 1, windows: 1,
+  sunI: 0.08, sunC: rgb('#B48CFF'),
+  hemiI: 0.28, hemiSky: rgb('#4A345C'), hemiGnd: rgb('#1A1018'),
+  fillI: 0.36, fillC: rgb('#D070B0'), envI: 0.62, exposure: 1.04,
+  shadow: 0.42, tint: [0.72, 0.58, 0.70], floorSun: 0, floorSunC: rgb('#FFD0A8'),
+  glassC: rgb('#6E3888'), glassA: 0.38, glassE: 0.45,
 });
 
 function mixParams(a, b, t) {
@@ -147,9 +147,9 @@ function parseClock(s) {
 const PLAN_MS = 20000;                                    // the target follows the clock every 20 s
 const SCAN_MS = 2000;                                     // materials and shadow flags are refreshed every 2 s
 const LAMP_COUNT = 6;
-const LAMP_COLOR = 0xffbb74;
-const LAMP_INTENSITY = 22;                                // the spot lights on the lit furniture (cd)
-const LAMP_POOL = 4.0;                                    // the same lamps on the baked floor (sunpatch.js)
+const LAMP_COLOR = 0xffc48a;
+const LAMP_INTENSITY = 26;                                // the spot lights on the lit furniture (cd)
+const LAMP_POOL = 5.5;                                    // the same lamps on the baked floor (sunpatch.js)
 const LAMP_ANGLE = 0.78;                                  // rad, half the cone of a pendant's shade
 const LAMP_PENUMBRA = 0.75;
 const ROOM = { x: 8.3, z: 6.3, y0: -0.05, y1: 3.0 };      // what the sun's shadow camera must cover, around the floor
@@ -172,7 +172,11 @@ export function createDaylight({ scene, renderer }) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   const fill = new THREE.DirectionalLight(0xffffff, 0.4);
   fill.position.set(6, 5, 8);
-  scene.add(sun, sun.target, hemi, fill);
+  const rim = new THREE.DirectionalLight(0xe070c8, 0);     // magenta from the window side
+  rim.position.set(-1.5, 3.2, -9);
+  const fog = new THREE.Fog(0x241430, 500, 800);
+  scene.fog = fog;
+  scene.add(sun, sun.target, hemi, fill, rim);
 
   // the desk pendants: soft downward cones, so they leave pools on the desks (the floor's pools: sunpatch.js)
   const lamps = [];
@@ -306,8 +310,62 @@ export function createDaylight({ scene, renderer }) {
     }
     for (const mat of baked) mat.color.setRGB(...p.tint);
     tmp.setRGB(...p.glassC, THREE.SRGBColorSpace);
-    for (const mat of glass) { mat.color.copy(tmp); mat.emissive.copy(tmp).multiplyScalar(p.glassE); mat.opacity = p.glassA; }
+    for (const mat of glass) {
+      mat.color.copy(tmp);
+      mat.emissive.set('#7AE0FF').lerp(tmp, 0.72);
+      mat.emissiveIntensity = 0.04 + 0.28 * p.night;
+      mat.opacity = p.glassA;
+      if (mat.metalness != null) {
+        if (mat.userData.dayMetal == null) { mat.userData.dayMetal = mat.metalness; mat.userData.dayRough = mat.roughness ?? 0.05; }
+        mat.metalness = lerp(mat.userData.dayMetal, 0.46, p.night);
+        mat.roughness = lerp(mat.userData.dayRough, 0.22, p.night);
+        mat.envMapIntensity = lerp(mat.userData.dayEnv ?? 1, 1.35, p.night);
+      }
+    }
+    rim.color.set('#E070C8');
+    rim.intensity = 0.72 * p.night;
+    fog.color.set('#2A1840');
+    fog.near = lerp(400, 84, p.night);
+    fog.far = lerp(800, 150, p.night);
+    dressNight(p.night);
     patch.update(dir, p.floorSunC, p.floorSun, 1 - p.bake);
+  }
+
+  // Lit furniture keeps its daytime colour on the material. At night it slides toward walnut, slate and deep green.
+  const NIGHT_MAT = {
+    oak: ['#3A2416', 0.5],
+    fabric_light: ['#3A3544', 0.88],
+    fabric_warm: ['#2C2834', 0.9],
+    bar_white: ['#322C38', 0.72],
+    wall_white: ['#2C2636', 0.86],
+    slab_white: ['#2A2432', 0.78],
+    pot_white: ['#4A3040', 0.72],
+    graphite: ['#26242C', 0.55],
+    black: ['#16141A', 0.5],
+    leaf_1: ['#176B40', 0.82],
+    leaf_2: ['#124E34', 0.84],
+    leaf_3: ['#1A7448', 0.8],
+    trunk: ['#3A2A20', 0.86],
+    cabin_floor: ['#2A2430', 0.7],
+    roof_deck: ['#241C28', 0.75],
+  };
+  const nightColor = new THREE.Color();
+  function dressNight(k) {
+    if (!building) return;
+    building.group.traverse((o) => {
+      if (!o.isMesh) return;
+      for (const m of [].concat(o.material)) {
+        const spec = m && NIGHT_MAT[m.name];
+        if (!spec || !m.color || m.userData.nightPatched) continue;
+        if (!m.userData.dayColor) {
+          m.userData.dayColor = m.color.clone();
+          m.userData.dayRough = m.roughness;
+        }
+        nightColor.set(spec[0]);
+        m.color.copy(m.userData.dayColor).lerp(nightColor, k);
+        if (m.roughness != null && m.userData.dayRough != null) m.roughness = lerp(m.userData.dayRough, spec[1], k);
+      }
+    });
   }
 
   function updateLamps() {

@@ -88,7 +88,9 @@ export class Actor {
   // ---------- model ----------
 
   setPlaceholderModel(color) {
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 40, 28), jelly(color));
+    const bodyMat = jelly(color);
+    glowBody(bodyMat);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.46, 40, 28), bodyMat);
     body.scale.set(1, 0.95, 0.82);
     body.position.y = 0.44;
     const eyeGeo = new THREE.CapsuleGeometry(0.042, 0.085, 6, 12);
@@ -106,9 +108,10 @@ export class Actor {
     let eyes = [];
     model.traverse((o) => {
       if (/^eye_[LR]/.test(o.name)) eyes.push(o);
-      if (o.isMesh && tint && /body/.test(o.name + (o.parent?.name || ''))) {
+      if (o.isMesh && /body/.test(o.name + (o.parent?.name || ''))) {
         o.material = o.material.clone();
-        o.material.color.set(tint);
+        if (tint) o.material.color.set(tint);
+        glowBody(o.material);
       }
     });
     eyes = eyes.filter((e) => !eyes.some((p) => p !== e && isAncestor(p, e)));
@@ -170,8 +173,7 @@ export class Actor {
     }
   }
 
-  // Name stays up. Selected (dark pill), needs-the-user (name + reason), hovered (name),
-  // everyone else a small name, and a resting bot adds "last did X, 2h ago".
+  // The floating tag is the name only. Status and "last did" stay on the tooltip and in the side panel.
   renderTag() {
     const s = this.status, bot = this.bot;
     if (!bot) return;
@@ -179,23 +181,14 @@ export class Actor {
     const resting = s === 'idle' && !attn;
     const mode = this.selected ? 'sel' : attn ? 'attn' : this.hovered ? 'hover' : resting ? 'rest' : 'name';
     const name = bot.name || '';
-    let text = name;
-    let sub = '';
-    if (mode === 'attn' || mode === 'sel' || mode === 'hover') {
-      const reason = reasonText(s, bot.step);
-      // Keep the reason, but short: a full sentence collides with the neighbour's name.
-      const brief = reason && reason.length > 14 ? `${reason.slice(0, 13).trimEnd()}…` : reason;
-      text = mode === 'attn' && brief ? `${name} · ${brief}` : name;
-    } else if (mode === 'rest') {
-      sub = lastDidLine(bot, this.nowMs);
-    }
-    const key = `${mode}|${s}|${text}|${sub}`;
+    const detail = resting ? lastDidLine(bot, this.nowMs) : reasonText(s, bot.step);
+    const key = `${mode}|${s}|${name}|${detail}`;
     if (key === this.tagKey) return;
     this.tagKey = key;
     this.tagEl.dataset.mode = mode;
-    this.tagText.textContent = text;
-    this.tagSub.textContent = sub;
-    this.tagEl.title = sub ? `${name}. ${sub}` : name;
+    this.tagText.textContent = name;
+    this.tagSub.textContent = '';
+    this.tagEl.title = detail ? `${name}. ${detail}` : name;
   }
 
   spotIsLounge() { return !!this.spot && this.spot.lounge; }
@@ -418,6 +411,13 @@ export class Actor {
 
 export function jelly(color) {
   return new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.18, sheen: 0.3 });
+}
+
+// A little of the bot's own colour, so it lifts off the dark floor without changing the hue.
+function glowBody(mat) {
+  if (!mat || !mat.emissive || !mat.color) return;
+  mat.emissive.copy(mat.color).multiplyScalar(0.7);
+  mat.emissiveIntensity = 0.46;
 }
 
 // "last did daily paper check, 2h ago". Skips the generic idle line ("waiting for a new task").

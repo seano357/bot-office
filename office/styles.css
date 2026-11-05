@@ -61,9 +61,9 @@
   --alert-strong: color-mix(in srgb, #FFD590 var(--n), #7A4600);
 
   /* page + scene backdrop */
-  --bg-0: color-mix(in srgb, #1B2240 var(--n), #ABACB1);
-  --bg-1: color-mix(in srgb, #10162B var(--n), #9D9EA4);
-  --bg-2: color-mix(in srgb, #080B18 var(--n), #8A8B92);
+  --bg-0: color-mix(in srgb, #2A1848 var(--n), #3A2460);
+  --bg-1: color-mix(in srgb, #140E28 var(--n), #1A1030);
+  --bg-2: color-mix(in srgb, #07060F var(--n), #07060F);
 
   /* layout */
   --gutter: 24px;
@@ -150,7 +150,7 @@ body {
 }
 #floors {
   position: fixed; z-index: 20; left: var(--gutter); top: var(--below-top);
-  width: var(--floors-w); max-height: calc(100vh - var(--below-top) - 210px);
+  width: var(--floors-w); max-height: calc(100vh - var(--below-top) - 280px);
 }
 #panel {
   position: fixed; z-index: 20; right: var(--gutter); top: var(--below-top);

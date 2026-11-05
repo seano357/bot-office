@@ -114,6 +114,13 @@ const MAIN = /* glsl */`
     vec3 bqD = texture2D( map, vMapUv ).rgb;
     diffuseColor.rgb += diffuse * ( bqRelight( bqD ) - bqD ) * bqDay;
     if ( bqLamp.r + bqLamp.g + bqLamp.b > 0.0 ) diffuseColor.rgb += bqLampPools();
+    float bqNight = 1.0 - bqDay;
+    float bqUp = max( vBqNormal.y, 0.0 );
+    float bqWin = smoothstep( 1.4, -5.6, vBqWorld.z );
+    diffuseColor.rgb += ( vec3( 0.72, 0.40, 0.18 ) * 0.22 + vec3( 0.48, 0.10, 0.36 ) * 0.16 ) * bqWin * bqUp * bqNight;
+    vec3 bqView = normalize( cameraPosition - vBqWorld );
+    float bqFres = pow( 1.0 - clamp( dot( normalize( vBqNormal ), bqView ), 0.0, 1.0 ), 3.0 );
+    diffuseColor.rgb += vec3( 0.08, 0.05, 0.11 ) * bqFres * bqUp * bqNight;
   }
 #endif`;
 

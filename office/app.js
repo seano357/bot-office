@@ -3,6 +3,7 @@
 // Without either (static preview) it runs on web/data/demo-state.json with a local simulation.
 import { initScene, renderScene, zoom, focusBot } from './scene/scene.js';
 import { initSound, sfx } from './audio/sound.js';
+import { initLofi } from './audio/lofi.js';
 
 const POLL_MS = 1000;
 const view = { currentFloor: null, selectedBot: null };
@@ -36,7 +37,10 @@ ui.initUI({
 });
 
 // music and sound effects (not on the wallpaper): the speaker button sits in the top bar's right group
-if (!WALLPAPER) initSound({ slot: document.querySelector('#topbar .bhq-right') });
+if (!WALLPAPER) {
+  initSound({ slot: document.querySelector('#topbar .bhq-right') });
+  initLofi(document.body);
+}
 
 addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 

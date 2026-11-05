@@ -1,4 +1,4 @@
-// The studio look: a clean white product-shot backdrop and a soft, dark, premium aura around and under the building.
+// The studio look: a deep indigo night backdrop and a soft plum aura around and under the building.
 //
 // How it is made (no sprites, no CSS glow, nothing drawn by hand):
 //  1. The building is drawn once more as a flat white silhouette into a small target (every material replaced, so
@@ -17,8 +17,8 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 export const STUDIO = {
   centre: [0.5, 0.45],                                    // where the light pools (fraction of the frame, y down)
   radii: [0.82, 0.78],                                    // ellipse the fall-off reaches its edge colour at
-  stops: [[0, '#ABACB1'], [0.5, '#9D9EA4'], [1, '#8A8B92']],
-  shadow: '#0B0C11',                                      // cool near-black, never pure black
+  stops: [[0, '#3A2460'], [0.5, '#1A1030'], [1, '#07060F']],
+  shadow: '#12081C',                                      // deep plum, never pure black
   layers: [                                               // sigma (px), push down (px), strength at the silhouette edge
     { sigma: 4, down: 2, w: 0.40 },                       // contact: a thin dark seam that grounds the edge
     { sigma: 30, down: 22, w: 0.40 },                     // penumbra: the body of the aura
@@ -63,7 +63,7 @@ const COMPOSE_FS = /* glsl */`
   uniform vec3 stop0, stop1, stop2, shadowC;
   uniform vec2 centre, radii, push[3];
   uniform vec3 layerW;
-  uniform float stopMid;
+  uniform float stopMid, photo;
   varying vec2 vUv;
 
   float hash( vec2 p ) { vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
@@ -83,6 +83,8 @@ const COMPOSE_FS = /* glsl */`
     dens *= 1.0 - smoothstep( 0.5, 0.9, texture2D( tHold, vUv ).r );    // nothing inside the silhouette: clear glass stays clear
     bg = mix( bg, shadowC, dens );
 
+    // A painted plate sits behind the canvas. Empty sky keeps its alpha so that image shows through.
+    if ( photo > 0.5 ) { gl_FragColor = vec4( c.rgb, c.a ); return; }
     vec3 rgb = c.rgb + bg * ( 1.0 - c.a );                              // c is premultiplied
     float n = hash( gl_FragCoord.xy ) + hash( gl_FragCoord.xy + 17.31 ) - 1.0;   // triangular dither, +-1 level
     gl_FragColor = vec4( rgb + n / 255.0, 1.0 );
@@ -112,6 +114,7 @@ export class StudioPass extends Pass {
         centre: { value: new THREE.Vector2(...STUDIO.centre) }, radii: { value: new THREE.Vector2(...STUDIO.radii) },
         push: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
         layerW: { value: new THREE.Vector3(L0.w, L1.w, L2.w) },
+        photo: { value: 0 },
       },
       vertexShader: QUAD_VS, fragmentShader: COMPOSE_FS, depthTest: false, depthWrite: false,
     });
@@ -120,6 +123,8 @@ export class StudioPass extends Pass {
     this.size = new THREE.Vector2(1, 1);
     this.setSize(1, 1);
   }
+
+  setPhoto(on) { this.composeMat.uniforms.photo.value = on ? 1 : 0; }
 
   // w, h = drawing-buffer pixels. Targets: silhouette + contact pair at 1/4, penumbra pair at 1/8, ambient at 1/32
   // (with a 1/16 step on the way down so every halving is an exact 2x2 average).

@@ -80,6 +80,7 @@ export function createPost(renderer, scene, camera) {
       h.uniforms.strength.value = v.uniforms.strength.value = this.base * intensity;
       composer.render(dt);
     },
+    setPhoto(on) { studio.setPhoto(on); },
   };
   api.setSize(size.x, size.y);
   return api;

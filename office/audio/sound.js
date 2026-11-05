@@ -28,7 +28,7 @@ export function soundState() {
 }
 
 function readPrefs() {
-  try { return { music: true, fx: true, ...JSON.parse(localStorage.getItem(PREFS_KEY)) }; } catch { return { music: true, fx: true }; }
+  try { return { music: false, fx: true, ...JSON.parse(localStorage.getItem(PREFS_KEY)) }; } catch { return { music: false, fx: true }; }
 }
 function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* private mode */ } }
 

@@ -13,6 +13,8 @@ import { Actor } from './actor.js';
 import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
 import { sofiaHour, fontsPromise } from './walls.js';
+import { createCity } from './city.js';
+import { mountBackdrop } from './backdrop.js';
 
 // Relative to the page (not the site root), so the office also works when it is published in a sub-folder, e.g.
 // <site>/office/ -> ../assets. Locally the page is at `/`, where this is /assets.
@@ -28,7 +30,8 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 // the camera), neighbours alternating so tags never collide.
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-let renderer, labels, camera, scene, container, callbacks, daylight, building, post;
+let renderer, labels, camera, scene, container, callbacks, daylight, building, post, city, backdrop;
+let plateOn = false;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -105,7 +108,8 @@ export function initScene(el, cbs = {}) {
   scene.environmentIntensity = 0.55;
 
   daylight = createDaylight({ scene, renderer });
-  document.documentElement.dataset.sky = 'studio';        // white backdrop at every hour: the UI stays on light glass (web/styles.css)
+  city = createCity(scene);
+  document.documentElement.dataset.sky = 'studio';        // the backdrop colour lives in studio.js; the UI cards stay glassy
   container.style.background = studioCss();               // the same backdrop as the post pass draws, for the first moments
 
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 240);
@@ -124,6 +128,13 @@ export function initScene(el, cbs = {}) {
   });
 
   post = createPost(renderer, scene, camera);
+  backdrop = mountBackdrop(container, (on) => {
+    plateOn = on;
+    city?.setPhoto(on);
+    post?.setPhoto(on);
+    container.style.background = on ? '#120818' : studioCss();
+    resize();
+  });
 
   addPointerHandlers();
   new ResizeObserver(resize).observe(container);
@@ -360,7 +371,11 @@ function resize() {
   camera.top = halfH; camera.bottom = -halfH;
   // keep the building clear of the glass panels: shift the view so its centre is the free space between them
   const shift = WALLPAPER ? 0 : clamp((w - 900) / 600, 0, 1) * (UI_RIGHT - UI_LEFT) / 2;   // wallpaper: no panels, centred
-  if (shift > 0.5) camera.setViewOffset(w, h, shift, 0, w, h); else camera.clearViewOffset();
+  // The painted terrace is the bottom of the plate. Drop the floor onto that lower-middle band.
+  const phone = document.documentElement.classList.contains('bhq-phone');
+  const drop = plateOn && !WALLPAPER ? Math.round(h * (phone ? 0.07 : 0.1)) : 0;
+  if (shift > 0.5 || drop) camera.setViewOffset(w, h, Math.max(0, shift), -drop, w, h);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
 }
 
@@ -631,6 +646,8 @@ function frame(t) {
   daylight.update(dt, nowMs);
   stepCamera(dt);
   if (building) building.update(dt, nowMs);
+  if (city) { city.follow(building ? building.activeY : 0); city.update(dt, nowSec); }
+  if (backdrop) backdrop.nudge(cam.x.x - HOME.x, cam.z.x - HOME.z);
   if (pointerDirty && !drag?.panning) { pointerDirty = false; setHover(pick()); }
   updateCursorGround();
 

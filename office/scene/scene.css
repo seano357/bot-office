@@ -8,6 +8,29 @@
 .hq-scene canvas.hq-canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }
 .hq-labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
 
+/* Painted city, behind the canvas. The shade is a sibling above the canvas and under the name tags. */
+.lofi-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.lofi-bg picture, .lofi-bg img {
+  position: absolute; left: -3%; top: -3%; width: 106%; height: 106%;
+  object-fit: cover; object-position: center 70%;
+}
+.lofi-bg.is-drift img { animation: lofi-drift 70s ease-in-out infinite alternate; }
+.lofi-bg { transform: translate3d(var(--lofi-x, 0), var(--lofi-z, 0), 0); }
+@keyframes lofi-drift {
+  from { transform: translate3d(-0.45%, -0.15%, 0); }
+  to { transform: translate3d(0.45%, 0.2%, 0); }
+}
+.lofi-bg-shade {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(8, 4, 16, .45) 0%, rgba(8, 4, 16, .12) 14%, transparent 28%, transparent 72%, rgba(8, 4, 16, .14) 86%, rgba(8, 4, 16, .42) 100%),
+    linear-gradient(180deg, rgba(6, 4, 14, .28) 0%, transparent 12%, transparent 78%, rgba(6, 4, 14, .35) 100%);
+}
+html[data-lofi="photo"] .hq-canvas { background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .lofi-bg.is-drift img { animation: none; }
+}
+
 /* Loader: a quiet label over a hairline, until the first floor drops in (the building then fades in under it).
    The children fade in after a beat, so a fast (cached) load never flashes it. */
 .hq-loading {
@@ -41,22 +64,15 @@
 .hqt[data-mode="off"] { display: none; }
 .hqt-sub { display: none; }
 
-/* a name on every bot; resting bots add one quiet line under it */
+/* a compact name on every bot; the status line lives in the tooltip and the side panel */
 .hqt[data-mode="name"] .hqt-pill,
 .hqt[data-mode="rest"] .hqt-pill {
   height: 22px; padding: 0 9px; gap: 0; font-size: 11px; font-weight: 650;
 }
 .hqt[data-mode="name"] .hqt-text,
-.hqt[data-mode="rest"] .hqt-text { max-width: 96px; }
+.hqt[data-mode="rest"] .hqt-text { max-width: 120px; }
 .hqt[data-mode="name"] .hqt-dot,
 .hqt[data-mode="rest"] .hqt-dot { display: none; }
-.hqt[data-mode="rest"] .hqt-sub {
-  display: block; max-width: 112px; margin-top: 3px; padding: 3px 8px; border-radius: 999px; box-sizing: border-box;
-  background: rgba(255, 255, 255, .78); border: 1px solid rgba(255, 255, 255, .85);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
-  color: #3A3A3C; font-size: 10px; font-weight: 650; line-height: 1.25;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 
 .hqt-pill {
   display: flex; align-items: center; gap: 7px; max-width: 250px; height: 28px; padding: 0 12px 0 10px;
@@ -76,18 +92,12 @@
 
 /* night: dark glass; the selected pill flips to light */
 :root[data-daylight="night"] .hqt-pill {
-  background: rgba(28, 28, 30, .66); border-color: rgba(255, 255, 255, .12); color: #F5F5F7;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  background: rgba(22, 16, 32, .88); border-color: rgba(255, 255, 255, .16); color: #F6F3FC;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
 }
 :root[data-daylight="night"] .hqt-stem { background: rgba(255, 255, 255, .28); }
 :root[data-daylight="night"] .hqt[data-mode="sel"] .hqt-pill { background: #F5F5F7; color: #1D1D1F; border-color: transparent; }
 :root[data-daylight="night"] .hqt[data-mode="sel"] .hqt-stem { background: rgba(255, 255, 255, .55); }
-html.bhq-phone .hqt[data-mode="rest"] .hqt-sub { display: none; }
-:root[data-daylight="night"] .hqt[data-mode="rest"] .hqt-sub {
-  background: rgba(28, 28, 30, .72); border-color: rgba(255, 255, 255, .12); color: #E6E6EC;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
-}
-
 @keyframes hqt-in { from { opacity: 0; transform: translateY(4px) scale(.94); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
