@@ -173,8 +173,7 @@ export class Actor {
     }
   }
 
-  // Name stays up. Selected (dark pill), needs-the-user (name + reason), hovered (name),
-  // everyone else a small name, and a resting bot adds "last did X, 2h ago".
+  // The floating tag is the name only. Status and "last did" stay on the tooltip and in the side panel.
   renderTag() {
     const s = this.status, bot = this.bot;
     if (!bot) return;
@@ -182,23 +181,14 @@ export class Actor {
     const resting = s === 'idle' && !attn;
     const mode = this.selected ? 'sel' : attn ? 'attn' : this.hovered ? 'hover' : resting ? 'rest' : 'name';
     const name = bot.name || '';
-    let text = name;
-    let sub = '';
-    if (mode === 'attn' || mode === 'sel' || mode === 'hover') {
-      const reason = reasonText(s, bot.step);
-      // Keep the reason, but short: a full sentence collides with the neighbour's name.
-      const brief = reason && reason.length > 14 ? `${reason.slice(0, 13).trimEnd()}…` : reason;
-      text = mode === 'attn' && brief ? `${name} · ${brief}` : name;
-    } else if (mode === 'rest') {
-      sub = lastDidLine(bot, this.nowMs);
-    }
-    const key = `${mode}|${s}|${text}|${sub}`;
+    const detail = resting ? lastDidLine(bot, this.nowMs) : reasonText(s, bot.step);
+    const key = `${mode}|${s}|${name}|${detail}`;
     if (key === this.tagKey) return;
     this.tagKey = key;
     this.tagEl.dataset.mode = mode;
-    this.tagText.textContent = text;
-    this.tagSub.textContent = sub;
-    this.tagEl.title = sub ? `${name}. ${sub}` : name;
+    this.tagText.textContent = name;
+    this.tagSub.textContent = '';
+    this.tagEl.title = detail ? `${name}. ${detail}` : name;
   }
 
   spotIsLounge() { return !!this.spot && this.spot.lounge; }
