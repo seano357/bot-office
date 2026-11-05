@@ -11,7 +11,8 @@ import { createPost } from './post.js';
 import { studioCss } from './studio.js';
 import { Actor } from './actor.js';
 import { generateBlob } from './blobgen.js';
-import { Spring, clamp } from './spring.js';
+import { Spring, clamp, REDUCED } from './spring.js';
+import { frontPose, lingerPose, hashId, LINGER_COUNT } from './walk.js';
 import { sofiaHour, fontsPromise } from './walls.js';
 import { createCity } from './city.js';
 import { mountBackdrop } from './backdrop.js';
@@ -35,6 +36,21 @@ let plateOn = false;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
+const crowd = [];
+const fronts = [];
+const wanders = [];
+function ensurePoses() {
+  if (fronts.length) return;
+  const p = { x: 0, z: 0, y: 0, yaw: 0 };
+  for (let i = 0; i < 4; i++) {
+    frontPose(i, p);
+    fronts.push({ id: i, pos: new THREE.Vector3(p.x, 0, p.z), yaw: p.yaw });
+  }
+  for (let i = 0; i < LINGER_COUNT; i++) {
+    lingerPose(i, p);
+    wanders.push({ pos: new THREE.Vector3(p.x, 0, p.z), yaw: p.yaw });
+  }
+}
 const retiring = new Set();
 const pickables = new Set();
 const models = new Map();            // avatar id -> Promise<Object3D|null>
@@ -192,8 +208,21 @@ function sync() {
     const posed = presentBot(bot);
     const deskIdx = (DESK_ORDER[(posed.desk || 1) - 1] || 1) - 1;
     const desk = assets.spots.desks[deskIdx] || assets.spots.desks[0];
-    if ((posed.effective_status || posed.status) === 'working' && !lounge.has(posed.id)) flags[deskIdx] = 1;
-    actor.update(posed, lounge.get(posed.id) || desk, { maxShare, selectedBot: view.selectedBot, now: parseTs(state.now) });
+    const st = posed.effective_status || posed.status;
+    if (st === 'working' && !lounge.has(posed.id)) flags[deskIdx] = 1;
+    ensurePoses();
+    const h = hashId(posed.id);
+    const front = fronts[h % fronts.length];
+    const wander = wanders[h % wanders.length];
+    let spot = desk;
+    if (REDUCED) {
+      if (st === 'waiting_user' || st === 'error') spot = front;
+      else if (st !== 'working') spot = lounge.get(posed.id) || desk;
+    }
+    actor.update(posed, spot, {
+      maxShare, selectedBot: view.selectedBot, now: parseTs(state.now),
+      walk: !REDUCED, desk, deskKey: deskIdx, front, wander, lingerI: h % wanders.length,
+    });
   }
   building.setScreens(flags);
   const floor = floors.find((f) => f.id === building.activeId);
@@ -652,7 +681,9 @@ function frame(t) {
   updateCursorGround();
 
   const hostAlpha = building?.activeOpen()?.alpha ?? 1;
-  for (const a of actors.values()) { a.hostAlpha = hostAlpha; a.tick(dt, nowSec); }
+  crowd.length = 0;
+  for (const a of actors.values()) if (!a.retiring) crowd.push(a);
+  for (const a of actors.values()) { a.peers = crowd; a.hostAlpha = hostAlpha; a.tick(dt, nowSec); }
   for (const a of retiring) {
     a.hostAlpha = a.ctx.inst.alpha;
     a.tick(dt, nowSec);

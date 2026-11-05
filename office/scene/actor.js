@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { Spring, REDUCED, clamp, smoothstep } from './spring.js';
+import { writeRoute, lingerPose, crowdScale, smoothRamp, FACE_CAMERA } from './walk.js';
 
 export const STATUS_COLOR = {
   working: '#34C759', idle: '#A1A1A6', waiting_user: '#FF9F0A', error: '#FF3B30', stuck: '#FF9500', done: '#0A84FF',
@@ -40,6 +41,25 @@ export class Actor {
     this.blinkT = -1;
     this.nextAction = 1 + Math.random() * 2;
     this.hopCooldown = 0.6;
+    this.pts = Array.from({ length: 16 }, () => ({ x: 0, z: 0, y: 0, yaw: 0 }));
+    this.ptN = 0;
+    this.seg = 0;
+    this.along = 0;
+    this.goal = { x: 0, z: 0, y: 0, yaw: 0 };
+    this.goalKind = '';
+    this.deskKey = -1;
+    this.arrived = false;
+    this.moving = false;
+    this.bob = 0;
+    this.walked = 0;
+    this.pause = 0;
+    this.lingerI = 0;
+    this.crowdK = 1;
+    this.crowdAt = 0;
+    this.speed = 0.66 + (hash(bot.id) % 32) / 100;
+    this.lane = ((hash(bot.id) % 3) - 1) * 0.14;
+    this.walk = false;
+    this.replan = false;
     this.retiring = false;
     this.dead = false;
     this.hostAlpha = 1;
@@ -161,11 +181,34 @@ export class Actor {
     this.tag.position.x = ((hash(this.id) % 3) - 1) * spread;
     this.renderTag();
 
-    if (spot && (!this.spot || this.spot.pos.distanceToSquared(spot.pos) > 1e-4)) {
-      if (!this.spot) this.dropIn(spot); else this.travelTo(spot);
-      this.spot = spot;
+    this.walk = !!view.walk;
+    this.deskSpot = view.desk || spot;
+    this.frontSpot = view.front || null;
+    if (!this.walk) {
+      if (spot && (!this.spot || this.spot.pos.distanceToSquared(spot.pos) > 1e-4)) {
+        if (!this.spot) this.dropIn(spot); else this.travelTo(spot);
+        this.spot = spot;
+      }
+    } else {
+      const kind = status === 'working' ? 'desk' : (status === 'waiting_user' || status === 'error') ? 'front' : 'wander';
+      const key = kind === 'desk' ? view.deskKey : kind === 'front' ? (view.front && view.front.id) : 'wander';
+      if (!this.spot) {
+        const start = kind === 'desk' ? this.deskSpot : kind === 'front' ? this.frontSpot : view.wander;
+        this.dropIn(start || spot);
+        this.spot = start || spot;
+        this.goalKind = kind;
+        this.deskKey = key;
+        this.lingerI = (view.lingerI || 0) + 1;
+        this.replan = true;
+      } else if (kind !== this.goalKind || key !== this.deskKey) {
+        this.goalKind = kind;
+        this.deskKey = key;
+        this.pause = 0;
+        this.arrived = false;
+        this.replan = true;
+      }
     }
-    this.ring.position.y = 0.012 - (this.spot ? this.spot.pos.y : 0);
+    this.ring.position.y = 0.012 - ((this.deskSpot || this.spot) ? (this.deskSpot || this.spot).pos.y : 0);
 
     if (statusChanged && prev) {
       if (status === 'done') { this.celebrate(); this.hop(0.45); }
@@ -211,6 +254,78 @@ export class Actor {
   }
 
   // ---------- motion ----------
+
+  steer() {
+    const g = this.goal;
+    if (this.goalKind === 'desk' && this.deskSpot) {
+      g.x = this.deskSpot.pos.x; g.z = this.deskSpot.pos.z; g.y = this.deskSpot.pos.y; g.yaw = this.deskSpot.yaw;
+    } else if (this.goalKind === 'front' && this.frontSpot) {
+      g.x = this.frontSpot.pos.x; g.z = this.frontSpot.pos.z; g.y = 0; g.yaw = this.frontSpot.yaw;
+    } else {
+      lingerPose(this.lingerI, g);
+    }
+    this.ptN = writeRoute(this.pts, this.root.position.x, this.root.position.z, g);
+    this.seg = 0;
+    this.along = 0;
+    this.arrived = this.ptN < 2;
+    if (this.arrived) this.arrive();
+  }
+
+  arrive() {
+    this.arrived = true;
+    this.moving = false;
+    this.bob = 0;
+    this.root.position.x = this.goal.x;
+    this.root.position.z = this.goal.z;
+    this.baseYaw = this.goal.yaw;
+    if (this.goalKind === 'wander') this.pause = 3.1 + (hash(this.id) % 100) / 70;
+  }
+
+  advance(dt) {
+    if (!this.walk || this.retiring) { this.moving = false; return; }
+    if (this.anim && this.anim.kind === 'drop') { this.moving = false; return; }
+    if (this.replan) { this.replan = false; this.steer(); }
+    if (this.pause > 0) {
+      this.pause -= dt;
+      this.moving = false;
+      if (this.pause <= 0 && this.goalKind === 'wander') { this.lingerI++; this.steer(); }
+      else return;
+    }
+    if (this.arrived || this.ptN < 2) { this.moving = false; return; }
+    const a = this.pts[this.seg], b = this.pts[this.seg + 1];
+    let dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-4) {
+      this.seg++;
+      if (this.seg >= this.ptN - 1) this.arrive();
+      return;
+    }
+    dx /= len; dz /= len;
+    this.crowdAt -= dt;
+    if (this.crowdAt <= 0) {
+      this.crowdAt = 0.12;
+      this.crowdK = this.peers ? crowdScale(this.root.position.x, this.root.position.z, dx, dz, this.peers, this.id) : 1;
+    }
+    const step = this.speed * (0.35 + 0.65 * smoothRamp(this.along, len)) * this.crowdK * dt;
+    this.along += step;
+    this.walked += step;
+    if (this.along >= len) {
+      this.root.position.x = b.x;
+      this.root.position.z = b.z;
+      this.seg++;
+      this.along = 0;
+      if (this.seg >= this.ptN - 1) this.arrive();
+    } else {
+      const k = this.along / len;
+      this.root.position.x = a.x + (b.x - a.x) * k - dz * this.lane;
+      this.root.position.z = a.z + (b.z - a.z) * k + dx * this.lane;
+    }
+    const seat = this.arrived ? this.goal.y : 0;
+    this.root.position.y += (seat - this.root.position.y) * Math.min(1, dt * 6);
+    this.baseYaw = Math.atan2(dx, dz);
+    this.moving = step > 0.0004;
+    this.bob = this.moving ? 0.045 * Math.abs(Math.sin((this.walked / 0.42) * Math.PI)) : 0;
+  }
 
   dropIn(spot) {
     this.root.position.copy(spot.pos);
@@ -275,19 +390,27 @@ export class Actor {
     const s = this.status;
     let y = 0, sx = 1, sy = 1, rx = 0, rz = 0, ox = 0;
 
+    if (this.walk) this.advance(dt, t);
+
     if (!REDUCED) {
       const breathe = Math.sin(t * 2.1 + this.phase);
       sy = 1 + 0.018 * breathe; sx = 1 - 0.012 * breathe;
-      if (s === 'working') { y = 0.012 * Math.abs(Math.sin(t * 9 + this.phase)); rx = 0.06; }
+      if (this.moving) {
+        y = this.bob;
+        sy = 1 + this.bob * 1.6;
+        sx = 1 - this.bob;
+      } else if (s === 'working' && this.arrived) { y = 0.02 * Math.abs(Math.sin(t * 9 + this.phase)); rx = 0.07; }
+      else if (s === 'working' && !this.walk) { y = 0.012 * Math.abs(Math.sin(t * 9 + this.phase)); rx = 0.06; }
       if (s === 'stuck') rz = 0.09 * Math.sin(t * 1.3 + this.phase);
-      if (s === 'error') {
+      if (s === 'error' && !this.moving) {
         const k = (t + this.phase) % 1.6;
         if (k < 0.45) ox = 0.03 * Math.sin(k * 70);
       }
-      if (s === 'waiting_user' && !this.anim) {
+      if ((s === 'waiting_user' || s === 'error') && !this.anim && (!this.walk || (this.arrived && !this.moving))) {
         this.nextAction -= dt;
-        if (this.nextAction <= 0) { this.hop(0.32); this.nextAction = 1.7 + Math.random() * 0.6; }
+        if (this.nextAction <= 0) { this.hop(0.34); this.nextAction = 1.6 + (hash(this.id) % 7) * 0.08; }
       }
+      if (!this.moving && this.arrived && this.goalKind === 'front') this.baseYaw = FACE_CAMERA + 0.22 * Math.sin(t * 2.2 + this.phase);
     }
 
     // one-shot animation
@@ -327,7 +450,7 @@ export class Actor {
     this.hopCooldown -= dt;
     if (dist < HOP_RANGE && this.hopCooldown <= 0 && !this.anim && !REDUCED) { this.hop(0.26); this.hopCooldown = HOP_COOLDOWN; }
 
-    const base = (this.baseYaw || 0) + (this.anim?.kind === 'travel' ? 0 : RESTING_TURN);
+    const base = (this.baseYaw || 0) + (this.moving || this.anim?.kind === 'travel' ? 0 : RESTING_TURN);
     let target = base;
     if (this.hovered || this.selected) target = CAMERA_YAW;
     else if (w > 0) {
@@ -378,7 +501,7 @@ export class Actor {
     if (!this.eyes.length) return;
     const s = this.status;
     let open = 1;
-    if (s === 'idle' && !this.spotIsLounge()) open = 0.12;        // sleeping at the desk
+    if (s === 'idle' && !this.moving && (this.arrived || !this.walk) && !this.spotIsLounge()) open = 0.12;
     else if (s === 'error') open = 0.55;
     else if (s === 'stuck') open = 0.7;
     if (open > 0.5 && !REDUCED) {
