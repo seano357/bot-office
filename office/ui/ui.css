@@ -63,7 +63,7 @@
    Lit from above, a slow light inside, a short soft shadow (it sits on white, not on a dark sky). */
 
 .bhq-surface {
-  --base: #232327; --glow: #6E6E78; --hi: #F2F2F7; --mid: #C8C8D0; --dim: #C8C8D0; --g1: .2; --g2: .09;
+  --base: #2A2142; --glow: #7A5BB8; --hi: #F6F3FC; --mid: #D2CCE2; --dim: #D2CCE2; --g1: .22; --g2: .1;
   position: relative; overflow: hidden; isolation: isolate;
   color: var(--hi);
   background: linear-gradient(180deg, rgba(255, 255, 255, .07), transparent 45%, rgba(0, 0, 0, .14)), var(--base);
@@ -820,7 +820,7 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
   display: flex; flex-direction: column;
   position: fixed; z-index: 21; left: 0; right: 0; bottom: 0; height: 50vh; height: 50dvh;
   border-radius: 28px 28px 0 0; color: #F2F2F7;
-  background: rgba(26, 26, 30, .92);
+  background: rgba(28, 20, 48, .92);
   -webkit-backdrop-filter: blur(28px) saturate(160%); backdrop-filter: blur(28px) saturate(160%);
   box-shadow: 0 -10px 40px rgba(18, 22, 34, .2), inset 0 1px 0 rgba(255, 255, 255, .14);
   transform: translate3d(0, calc(100% - 132px), 0); /* until ui.js measures the peek */
@@ -967,5 +967,37 @@ html.bhq-phone body { overscroll-behavior: none; -webkit-tap-highlight-color: tr
   .bhq-phone .bhq-sheet { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .bhq-phone .bhq-sheet { -webkit-backdrop-filter: none; backdrop-filter: none; background: #1A1A1E; }
+  .bhq-phone .bhq-sheet { -webkit-backdrop-filter: none; backdrop-filter: none; background: #1C1430; }
+}
+
+/* lo-fi player: off until pressed. Sits above the zoom, clear of the activity panel. */
+.lofi {
+  position: fixed; z-index: 24; pointer-events: auto;
+  right: calc(var(--gutter, 24px) * 2 + var(--panel-w, 352px));
+  bottom: calc(var(--gutter, 24px) + 52px);
+  display: flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 10px 0 6px; border-radius: 20px;
+  background: rgba(42, 33, 66, .9); color: #F6F3FC;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 6px 16px rgba(8, 4, 16, .35);
+  font: 800 12px/1 ui-rounded, "Nunito", system-ui, sans-serif;
+}
+.lofi-play {
+  height: 28px; padding: 0 10px; border: 0; border-radius: 14px; cursor: pointer;
+  background: #F6F3FC; color: #241833; font: inherit;
+}
+.lofi.is-on .lofi-play { background: #F0ABFC; color: #1A1028; }
+.lofi-name { letter-spacing: .02em; }
+.lofi-vol { width: 72px; accent-color: #E879F9; }
+.lofi-play:focus-visible, .lofi-vol:focus-visible { outline: 2px solid #F6F3FC; outline-offset: 2px; }
+.bhq-phone .lofi {
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  right: auto;
+  bottom: calc(var(--bhq-vis, 50dvh) + 12px);
+}
+.bhq-phone .lofi-name { display: none; }
+.bhq-phone .lofi-vol { width: 56px; }
+.bhq-phone.bhq-land .lofi {
+  left: auto;
+  right: calc(var(--bhq-side, 320px) + 12px);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
 }

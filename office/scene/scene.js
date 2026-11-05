@@ -13,6 +13,7 @@ import { Actor } from './actor.js';
 import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
 import { sofiaHour, fontsPromise } from './walls.js';
+import { createCity } from './city.js';
 
 // Relative to the page (not the site root), so the office also works when it is published in a sub-folder, e.g.
 // <site>/office/ -> ../assets. Locally the page is at `/`, where this is /assets.
@@ -28,7 +29,7 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 // the camera), neighbours alternating so tags never collide.
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-let renderer, labels, camera, scene, container, callbacks, daylight, building, post;
+let renderer, labels, camera, scene, container, callbacks, daylight, building, post, city;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -105,7 +106,8 @@ export function initScene(el, cbs = {}) {
   scene.environmentIntensity = 0.55;
 
   daylight = createDaylight({ scene, renderer });
-  document.documentElement.dataset.sky = 'studio';        // white backdrop at every hour: the UI stays on light glass (web/styles.css)
+  city = createCity(scene);
+  document.documentElement.dataset.sky = 'studio';        // the backdrop colour lives in studio.js; the UI cards stay glassy
   container.style.background = studioCss();               // the same backdrop as the post pass draws, for the first moments
 
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 240);
@@ -631,6 +633,7 @@ function frame(t) {
   daylight.update(dt, nowMs);
   stepCamera(dt);
   if (building) building.update(dt, nowMs);
+  if (city) { city.follow(building ? building.activeY : 0); city.update(dt, nowSec); }
   if (pointerDirty && !drag?.panning) { pointerDirty = false; setHover(pick()); }
   updateCursorGround();
 

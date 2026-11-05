@@ -62,13 +62,13 @@ const DUSK = P({                                          // after sunset: lamps
   shadow: 0.32, tint: [1.3, 1.02, 0.84], floorSun: 0, floorSunC: rgb('#FFD27E'),
   glassC: rgb('#4A5487'), glassA: 0.8, glassE: 0.5,
 });
-const NIGHT = P({                                         // dim warm room, lamp pools on the desks, deep navy glass
-  night: 1, bake: 0.6, lamps: 1, windows: 1,
-  sunI: 0.2, sunC: rgb('#8CA6FF'),
-  hemiI: 0.4, hemiSky: rgb('#6A6158'), hemiGnd: rgb('#2A2420'),
-  fillI: 0.15, fillC: rgb('#8C8098'), envI: 0.2, exposure: 1.0,
-  shadow: 0.4, tint: [0.95, 0.8, 0.62], floorSun: 0, floorSunC: rgb('#FFEBD2'),
-  glassC: rgb('#1A2A66'), glassA: 0.92, glassE: 0.5,
+const NIGHT = P({                                         // loft at night: warm lamps inside, magenta-indigo glass toward the city
+  night: 1, bake: 0.55, lamps: 1, windows: 1,
+  sunI: 0.16, sunC: rgb('#B48CFF'),
+  hemiI: 0.48, hemiSky: rgb('#6A5088'), hemiGnd: rgb('#3A2430'),
+  fillI: 0.22, fillC: rgb('#E090C8'), envI: 0.28, exposure: 1.02,
+  shadow: 0.34, tint: [1.05, 0.82, 0.95], floorSun: 0, floorSunC: rgb('#FFD0A8'),
+  glassC: rgb('#4A2070'), glassA: 0.72, glassE: 0.9,
 });
 
 function mixParams(a, b, t) {

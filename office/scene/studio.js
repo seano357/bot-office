@@ -1,4 +1,4 @@
-// The studio look: a clean white product-shot backdrop and a soft, dark, premium aura around and under the building.
+// The studio look: a deep indigo night backdrop and a soft plum aura around and under the building.
 //
 // How it is made (no sprites, no CSS glow, nothing drawn by hand):
 //  1. The building is drawn once more as a flat white silhouette into a small target (every material replaced, so
@@ -17,8 +17,8 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 export const STUDIO = {
   centre: [0.5, 0.45],                                    // where the light pools (fraction of the frame, y down)
   radii: [0.82, 0.78],                                    // ellipse the fall-off reaches its edge colour at
-  stops: [[0, '#ABACB1'], [0.5, '#9D9EA4'], [1, '#8A8B92']],
-  shadow: '#0B0C11',                                      // cool near-black, never pure black
+  stops: [[0, '#3A2460'], [0.5, '#1A1030'], [1, '#07060F']],
+  shadow: '#12081C',                                      // deep plum, never pure black
   layers: [                                               // sigma (px), push down (px), strength at the silhouette edge
     { sigma: 4, down: 2, w: 0.40 },                       // contact: a thin dark seam that grounds the edge
     { sigma: 30, down: 22, w: 0.40 },                     // penumbra: the body of the aura
