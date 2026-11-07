@@ -20,7 +20,7 @@ const NIGHT_TINT = [0.22, 0.16, 0.24];   // used when a baked mesh has no night 
 // The night jpegs are a warm mid-brown. These multipliers pull each surface toward the painted terrace.
 const NIGHT_SURFACE = {
   baked_floor: [0.40, 0.28, 0.38],
-  baked_wall_left: [0.52, 0.40, 0.52],
+  baked_wall_left: [0.36, 0.28, 0.38],
   baked_slab_top: [0.30, 0.22, 0.32],
 };
 function nightTint(name) {

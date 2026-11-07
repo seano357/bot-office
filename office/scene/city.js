@@ -37,12 +37,21 @@ export function createCity(scene) {
 
   const cozy = new THREE.Group();
   root.add(cozy);
-  const bulbs = stringLights(cozy, PHONE ? 9 : 14);
-  const lamp = new THREE.PointLight(0xffb078, 0.9, 16, 2);
+  const bulbs = stringLights(cozy, PHONE ? 9 : 14, -6.6, 6.6, -5.62, 2.22);
+  const side = stringLights(cozy, PHONE ? 5 : 7, -1.2, 3.6, 7.15, 2.05, true);
+  for (const b of side) bulbs.push(b);
+  const lamp = new THREE.PointLight(0xffb078, 0.7, 14, 2);
   lamp.position.set(-0.4, 2.05, -4.8);
   cozy.add(lamp);
+  const cool = new THREE.PointLight(0x49c8e8, 0.22, 12, 2);
+  cool.position.set(6.2, 1.6, -4.2);
+  cozy.add(cool);
   // Open floor, clear of the tables, the bar and the existing trees.
   for (const [x, z] of [[-7.05, -5.25], [3.4, -5.15], [3.25, 5.15], [-5.4, 5.05]]) cozy.add(plant(x, z));
+  const ivySpots = PHONE
+    ? [[-6.2, -5.55, 1.7], [5.4, -5.55, 1.7]]
+    : [[-6.2, -5.55, 1.9], [-1.5, -5.6, 1.6], [4.6, -5.55, 1.9], [-7.15, 4.7, 1.15], [7.15, 4.55, 1.2]];
+  for (const [x, z, h] of ivySpots) cozy.add(ivy(x, z, h));
 
   let rain = null;
   if (!PHONE && !REDUCED) rain = makeRain();
@@ -167,23 +176,42 @@ function driftClouds(clouds, dt) {
   }
 }
 
-function stringLights(parent, count) {
+function stringLights(parent, count, a, b, fixed, y, alongZ) {
   const bulbs = [];
   const pts = [];
+  const geo = new THREE.SphereGeometry(0.06, 8, 6);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe1c2 });
   for (let i = 0; i < count; i++) {
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.065, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffe1c2 }),
-    );
-    const x = -6.6 + (13.2 * i) / (count - 1);
-    const sag = Math.sin((i / (count - 1)) * Math.PI) * 0.28;
-    bulb.position.set(x, 2.22 - sag, -5.62);
+    const bulb = new THREE.Mesh(geo, mat.clone());
+    const t = i / (count - 1);
+    const sag = Math.sin(t * Math.PI) * 0.22;
+    const u = a + (b - a) * t;
+    bulb.position.set(alongZ ? fixed : u, y - sag, alongZ ? u : fixed);
     parent.add(bulb);
     bulbs.push(bulb);
     pts.push(bulb.position.clone());
   }
   parent.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x5a3a32 })));
   return bulbs;
+}
+
+function ivy(x, z, h) {
+  const g = new THREE.Group();
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.035, h, 5),
+    new THREE.MeshStandardMaterial({ color: 0x1a3a28, roughness: 0.86 }),
+  );
+  stem.position.y = h * 0.45;
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x145c38, roughness: 0.84 });
+  for (let i = 0; i < 4; i++) {
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.16, 7, 5), leafMat);
+    leaf.position.set((i - 1.5) * 0.12, 0.35 + i * 0.22, (i % 2 ? 0.08 : -0.06));
+    leaf.scale.set(1.3, 0.55, 0.7);
+    g.add(leaf);
+  }
+  g.add(stem);
+  g.position.set(x, 0, z);
+  return g;
 }
 
 function plant(x, z) {
