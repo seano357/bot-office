@@ -1,5 +1,5 @@
-// Time of day (CONTRACT v2.2): the light inside and on the building follows the real sun where the viewer is (the time
-// zone's city, or ?lat=..&lon=..). Everything is a continuous function of the sun's elevation and side of the sky,
+// Time of day (CONTRACT v2.2). The live Office is the night loft: no clock is consulted unless a debug
+// override asks for one. Everything is still a continuous function of the sun's elevation and side of the sky,
 // recomputed every 20 s and followed with a soft lag, so nothing ever switches: light colour and strength, the sun's
 // direction (and with it the stripes and the length of every shadow), the room's ambient, the night lightmaps, the
 // lamps and the glass. Five looks are blended by elevation: night (below -9°), twilight (dawn or dusk, around the
@@ -10,8 +10,9 @@
 // sun reaches the whole floor, the window frame casts the stripes. The studio backdrop (studio.js) stays white.
 // Publishes <html data-daylight="dawn|day|golden|dusk|night"> and --night (0..1), at most once a second.
 //
-// Tests: ?time=18:50 or window.bothq.setTime('18:50') hold that time on a fixed reference day (latitude 42.7°, sun
-// declination +10°, solar noon 12:40: 07:15 morning, 13:00 day, 18:50 sunset, 23:00 night), the same on every date;
+// The default hold is 23:00 on the reference day, which is full night. Tests: ?time=18:50 or
+// window.bothq.setTime('18:50') hold that time instead (latitude 42.7°, sun declination +10°, solar noon
+// 12:40: 07:15 morning, 13:00 day, 18:50 sunset, 23:00 night), the same on every date;
 // ?time=18:50&real=1 = today's real sun at that time; ?time=auto or setTime(null) = the live clock.
 import * as THREE from 'three';
 import { smoothstep, lerp, clamp } from './spring.js';
@@ -198,7 +199,8 @@ export function createDaylight({ scene, renderer }) {
   const glass = new Set();                        // the curtain wall's panes
   const uNight = { value: 0 };
   const state = { night: 0, lampsK: 0, windowsK: 0, phase: 'day', minutes: 720, el: 45, az: 0, params: null };
-  let override = null;                            // minutes (?time= / setTime), or null = the live clock
+  const NIGHT_MINUTES = 23 * 60;                  // the ordinary Office: full night, no local clock
+  let override = NIGHT_MINUTES;                   // minutes (?time= / setTime); null = the live clock
   const real = params.get('real') === '1';        // ?time=..&real=1: today's real sun at that time
   let building = null;
   let cur = null;
@@ -215,10 +217,18 @@ export function createDaylight({ scene, renderer }) {
   const neonPink = new THREE.Color('#E070B0');
 
   const urlTime = params.get('time');
-  if (urlTime && urlTime !== 'auto') override = parseClock(urlTime);
+  if (urlTime === 'auto') override = null;
+  else if (urlTime) {
+    const parsed = parseClock(urlTime);
+    if (parsed != null) override = parsed;
+  }
 
   function setTime(value) {
-    override = value && value !== 'auto' ? parseClock(value) : null;
+    if (value == null || value === 'auto') override = null;
+    else {
+      const parsed = parseClock(value);
+      override = parsed == null ? NIGHT_MINUTES : parsed;
+    }
     lastPlan = lastHtml = -1e9;
   }
 
