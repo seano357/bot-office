@@ -116,11 +116,17 @@ const MAIN = /* glsl */`
     if ( bqLamp.r + bqLamp.g + bqLamp.b > 0.0 ) diffuseColor.rgb += bqLampPools();
     float bqNight = 1.0 - bqDay;
     float bqUp = max( vBqNormal.y, 0.0 );
-    float bqWin = smoothstep( 1.4, -5.6, vBqWorld.z );
-    diffuseColor.rgb += ( vec3( 0.72, 0.40, 0.18 ) * 0.22 + vec3( 0.48, 0.10, 0.36 ) * 0.16 ) * bqWin * bqUp * bqNight;
+    float bqWin = smoothstep( 0.6, -5.4, vBqWorld.z );
+    // Amber from the lamps, a little pink, and a cool blue from the city, instead of one purple wash.
+    diffuseColor.rgb += ( vec3( 0.90, 0.52, 0.22 ) * 0.16 + vec3( 0.55, 0.16, 0.38 ) * 0.07 + vec3( 0.16, 0.42, 0.62 ) * 0.09 ) * bqWin * bqUp * bqNight;
     vec3 bqView = normalize( cameraPosition - vBqWorld );
-    float bqFres = pow( 1.0 - clamp( dot( normalize( vBqNormal ), bqView ), 0.0, 1.0 ), 3.0 );
-    diffuseColor.rgb += vec3( 0.08, 0.05, 0.11 ) * bqFres * bqUp * bqNight;
+    float bqFres = pow( 1.0 - clamp( dot( normalize( vBqNormal ), bqView ), 0.0, 1.0 ), 2.6 );
+    diffuseColor.rgb += vec3( 0.11, 0.09, 0.13 ) * bqFres * bqUp * bqNight;
+    float bqFar = smoothstep( -1.5, -5.5, vBqWorld.z );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.14, 0.07, 0.22 ), bqFar * 0.18 * bqNight );
+    float bqEdge = clamp( smoothstep( 7.05, 8.05, abs( vBqWorld.x ) ) + smoothstep( 5.15, 6.15, abs( vBqWorld.z ) ), 0.0, 1.0 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.04, 0.025, 0.06 ), bqEdge * 0.85 * bqNight );
+    diffuseColor.a *= 1.0 - bqEdge * 0.92 * bqNight;
   }
 #endif`;
 

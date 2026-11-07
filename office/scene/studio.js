@@ -83,8 +83,16 @@ const COMPOSE_FS = /* glsl */`
     dens *= 1.0 - smoothstep( 0.5, 0.9, texture2D( tHold, vUv ).r );    // nothing inside the silhouette: clear glass stays clear
     bg = mix( bg, shadowC, dens );
 
-    // A painted plate sits behind the canvas. Empty sky keeps its alpha so that image shows through.
-    if ( photo > 0.5 ) { gl_FragColor = vec4( c.rgb, c.a ); return; }
+    // Painted plate: keep the sky clear, and lay a soft dark fringe just outside the floor
+    // so the slab edge feathers into the terrace instead of ending in a hard cut.
+    if ( photo > 0.5 ) {
+      float soft = min( 1.0, 2.0 * texture2D( tL2, vUv + push[2] ).r );
+      float hold = texture2D( tHold, vUv ).r;
+      soft *= 1.0 - smoothstep( 0.25, 0.75, hold );
+      vec3 fringe = vec3( 0.04, 0.02, 0.07 );
+      gl_FragColor = vec4( c.rgb + fringe * soft, max( c.a, soft * 0.72 ) );
+      return;
+    }
     vec3 rgb = c.rgb + bg * ( 1.0 - c.a );                              // c is premultiplied
     float n = hash( gl_FragCoord.xy ) + hash( gl_FragCoord.xy + 17.31 ) - 1.0;   // triangular dither, +-1 level
     gl_FragColor = vec4( rgb + n / 255.0, 1.0 );

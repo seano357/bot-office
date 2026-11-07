@@ -66,9 +66,9 @@ const NIGHT = P({                                         // loft at night: dark
   night: 1, bake: 0.94, lamps: 1, windows: 1,
   sunI: 0.08, sunC: rgb('#B48CFF'),
   hemiI: 0.28, hemiSky: rgb('#4A345C'), hemiGnd: rgb('#1A1018'),
-  fillI: 0.36, fillC: rgb('#D070B0'), envI: 0.62, exposure: 1.04,
-  shadow: 0.42, tint: [0.72, 0.58, 0.70], floorSun: 0, floorSunC: rgb('#FFD0A8'),
-  glassC: rgb('#6E3888'), glassA: 0.38, glassE: 0.45,
+  fillI: 0.22, fillC: rgb('#C4896E'), envI: 0.7, exposure: 1.02,
+  shadow: 0.42, tint: [0.78, 0.66, 0.72], floorSun: 0, floorSunC: rgb('#FFD0A8'),
+  glassC: rgb('#3A3348'), glassA: 0.2, glassE: 0.22,
 });
 
 function mixParams(a, b, t) {
@@ -172,11 +172,13 @@ export function createDaylight({ scene, renderer }) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   const fill = new THREE.DirectionalLight(0xffffff, 0.4);
   fill.position.set(6, 5, 8);
-  const rim = new THREE.DirectionalLight(0xe070c8, 0);     // magenta from the window side
+  const rim = new THREE.DirectionalLight(0xe070c8, 0);     // pink from the window side
   rim.position.set(-1.5, 3.2, -9);
+  const city = new THREE.DirectionalLight(0x49c8e8, 0);    // cool city bounce from the right
+  city.position.set(9, 2.4, -4);
   const fog = new THREE.Fog(0x241430, 500, 800);
   scene.fog = fog;
-  scene.add(sun, sun.target, hemi, fill, rim);
+  scene.add(sun, sun.target, hemi, fill, rim, city);
 
   // the desk pendants: soft downward cones, so they leave pools on the desks (the floor's pools: sunpatch.js)
   const lamps = [];
@@ -210,6 +212,7 @@ export function createDaylight({ scene, renderer }) {
   const centre = new THREE.Vector3();
   const corner = new THREE.Vector3();
   const tmp = new THREE.Color();
+  const neonPink = new THREE.Color('#E070B0');
 
   const urlTime = params.get('time');
   if (urlTime && urlTime !== 'auto') override = parseClock(urlTime);
@@ -312,8 +315,8 @@ export function createDaylight({ scene, renderer }) {
     tmp.setRGB(...p.glassC, THREE.SRGBColorSpace);
     for (const mat of glass) {
       mat.color.copy(tmp);
-      mat.emissive.set('#7AE0FF').lerp(tmp, 0.72);
-      mat.emissiveIntensity = 0.04 + 0.28 * p.night;
+      mat.emissive.set('#7AD8FF').lerp(neonPink, 0.45);
+      mat.emissiveIntensity = 0.03 + 0.16 * p.night;
       mat.opacity = p.glassA;
       if (mat.metalness != null) {
         if (mat.userData.dayMetal == null) { mat.userData.dayMetal = mat.metalness; mat.userData.dayRough = mat.roughness ?? 0.05; }
@@ -322,11 +325,14 @@ export function createDaylight({ scene, renderer }) {
         mat.envMapIntensity = lerp(mat.userData.dayEnv ?? 1, 1.35, p.night);
       }
     }
-    rim.color.set('#E070C8');
-    rim.intensity = 0.72 * p.night;
-    fog.color.set('#2A1840');
-    fog.near = lerp(400, 84, p.night);
-    fog.far = lerp(800, 150, p.night);
+    rim.color.set('#E090C0');
+    rim.intensity = 0.34 * p.night;
+    city.color.set('#49C8E8');
+    city.intensity = 0.2 * p.night;
+    fog.color.set('#3A2468');
+    fog.near = lerp(400, 102, p.night);
+    fog.far = lerp(800, 148, p.night);
+    thinSlabs(p.night);
     dressNight(p.night);
     patch.update(dir, p.floorSunC, p.floorSun, 1 - p.bake);
   }
@@ -364,7 +370,41 @@ export function createDaylight({ scene, renderer }) {
         nightColor.set(spec[0]);
         m.color.copy(m.userData.dayColor).lerp(nightColor, k);
         if (m.roughness != null && m.userData.dayRough != null) m.roughness = lerp(m.userData.dayRough, spec[1], k);
+        if (m.name === 'slab_white' && m.metalness != null) {
+          if (m.userData.dayMetal == null) m.userData.dayMetal = m.metalness;
+          m.metalness = lerp(m.userData.dayMetal, 0.28, k);
+          m.transparent = k > 0.45;
+          m.opacity = lerp(1, 0.28, k);
+          m.depthWrite = k < 0.45;
+        }
+        if (m.userData.nightPatched && (m.name === 'baked_floor' || (m.name || '').startsWith('style_'))) {
+          if (k > 0.45 && !m.transparent) { m.transparent = true; m.depthWrite = true; m.needsUpdate = true; }
+          else if (k < 0.2 && m.transparent && m.name === 'baked_floor') { m.transparent = false; m.needsUpdate = true; }
+        }
       }
+    });
+  }
+
+  // The open floor's side is a thick box. At night it becomes a thin dark lip so the room
+  // sits on the terrace instead of floating as a slab. Daytime scale is restored.
+  let slabK = -1;
+  function thinSlabs(k) {
+    if (!building || Math.abs(k - slabK) < 0.05) return;
+    slabK = k;
+    const thin = 1 - k * 0.74;
+    building.group.traverse((o) => {
+      if (!o.name || o.name.indexOf('slab_') !== 0) return;
+      if (!o.userData.slab0) {
+        o.userData.slab0 = { sy: o.scale.y, py: o.position.y };
+        o.updateWorldMatrix(true, false);
+        const before = new THREE.Box3().setFromObject(o).max.y;
+        o.scale.y = o.userData.slab0.sy * 0.26;
+        o.updateWorldMatrix(true, false);
+        o.userData.lift = before - new THREE.Box3().setFromObject(o).max.y;
+        o.scale.y = o.userData.slab0.sy;
+      }
+      o.scale.y = o.userData.slab0.sy * thin;
+      o.position.y = o.userData.slab0.py + o.userData.lift * ((1 - thin) / 0.74);
     });
   }
 
