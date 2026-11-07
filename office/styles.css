@@ -9,12 +9,12 @@
  * with --night would pass through grey-on-grey around dusk, so the UI never rests in between.)
  */
 
-@property --night { syntax: "<number>"; inherits: true; initial-value: 0; }
-@property --theme { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --night { syntax: "<number>"; inherits: true; initial-value: 1; }
+@property --theme { syntax: "<number>"; inherits: true; initial-value: 1; }
 
 :root {
-  --night: 0;
-  --theme: 0;
+  --night: 1;                                         /* the Office starts on the night loft; a debug clock can still move it */
+  --theme: 1;
   --n: calc(var(--theme) * 100%);
 
   /* text */
